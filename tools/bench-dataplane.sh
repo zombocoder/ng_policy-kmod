@@ -121,7 +121,7 @@ if ! kldstat -q -m ng_policy 2>/dev/null; then
 	if [ ! -f "$NGP_KO" ]; then
 		echo "bench-dataplane.sh: ng_policy is not loaded and" >&2
 		echo "  $NGP_KO does not exist -- build it first:" >&2
-		echo "  make -C $SCRIPT_DIR/../src" >&2
+		echo "  make -C $SCRIPT_DIR/../sys/netgraph/ng_policy" >&2
 		exit 1
 	fi
 	if ! kldload -n "$NGP_KO" 2>/dev/null; then

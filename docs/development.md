@@ -32,7 +32,7 @@ concurrency tests). Also `-Werror`.
 make
 ```
 
-Descends into `src`, `man` and `tests`. `doas make install` puts the
+Descends into `sys/netgraph/ng_policy`, `man` and `tests`. `doas make install` puts the
 module in `/boot/modules` (running `kldxref`, so `kldload ng_policy`
 then works by name) and `man/ng_policy.4` in `/usr/share/man/man4`.
 
