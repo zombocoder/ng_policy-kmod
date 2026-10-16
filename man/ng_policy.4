@@ -1,0 +1,527 @@
+.\"-
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.Dd October 16, 2026
+.Dt NG_POLICY 4
+.Os
+.Sh NAME
+.Nm ng_policy
+.Nd netgraph identity-aware policy enforcement node type
+.Sh SYNOPSIS
+.In netgraph/ng_policy/ng_policy.h
+.Sh DESCRIPTION
+The
+.Nm
+node type performs stateless, identity-aware policy enforcement on
+Ethernet frames.
+It registers
+.Em endpoints ,
+each a pair of hooks, evaluates every frame crossing one of those hooks
+against a precompiled, priority-ordered rule set, and either forwards the
+frame to the endpoint's other hook or drops it.
+.Pp
+The node compiles nothing itself.
+Rules, endpoint registrations and an IPv4-to-endpoint address map arrive
+over its own netgraph control socket already in binary form, and are
+swapped into place atomically as a single immutable
+.Em generation .
+Translating tenant intent, security groups, labels or any other
+higher-level concept into endpoint identifiers and IPv4 rules is entirely
+a userland concern.
+.Pp
+The node knows endpoint identifiers, IPv4 addresses, protocols, ports,
+ICMP type and code, actions and generation numbers.
+It knows nothing about tenants, VPCs, subnets, jails, virtual machines,
+labels, applications, environments or clusters, and it makes no
+forwarding decision of its own: given a frame and the endpoint its
+ingress hook fixes, it decides
+.Dv NG_POLICY_ALLOW
+or
+.Dv NG_POLICY_DROP
+and, if allowed, hands the frame to the one pre-wired egress hook for
+that endpoint pair.
+It never consults a routing table, never selects among candidate egress
+hooks, and never learns topology from traffic.
+.Ss Fail-closed by default
+A freshly constructed node is at generation 0 with a default action of
+.Dv NG_POLICY_DROP
+and mode
+.Dv NG_POLICY_MODE_ENFORCE .
+It blocks all traffic until a policy generation is committed, or until
+the mode is set to
+.Dv NG_POLICY_MODE_DISABLED .
+This is deliberate and is almost always the first thing to surprise
+someone experimenting by hand.
+.Sh HOOKS
+Hooks are created in pairs, one pair per endpoint: a workload side and a
+fabric side.
+A frame allowed on one is forwarded to the other.
+.Pp
+The names
+.Va hook
+and
+.Va peer_hook
+are given to
+.Dv NGM_POLICY_ENDPOINT_ADD
+and are arbitrary.
+The conventional spellings are
+.Ql ep-%u
+and
+.Ql fab-%u
+.Pq Dv NG_POLICY_HOOK_EP_FMT , NG_POLICY_HOOK_FAB_FMT ,
+but hook names carry no authority whatsoever: the numeric endpoint
+identifier assigned by
+.Dv NGM_POLICY_ENDPOINT_ADD
+is the only identity the node recognises.
+.Pp
+Binding is lazy and symmetric.
+A hook may be connected before or after its endpoint is registered;
+both orders reach the same state.
+A frame arriving on a hook that belongs to no registered endpoint is
+dropped and counted in
+.Va unbound_hook_packets .
+.Pp
+.Va peer_hook
+may be the empty string, in which case the endpoint has no egress: all
+of its traffic is dropped and counted in
+.Va no_peer_packets .
+.Sh ENDPOINTS
+An endpoint identifier is a 32-bit value.
+Valid identifiers for registration run from 1 to
+.Dv NG_POLICY_EP_ID_MAX
+.Pq 0xfffffeff ;
+the following are reserved and may appear in rules but never in a
+registration:
+.Bl -tag -width ".Dv NG_POLICY_EP_LOCAL_HOST"
+.It Dv NG_POLICY_EP_ANY
+.Pq 0x00000000
+Matches any endpoint when used in a rule.
+.It Dv NG_POLICY_EP_LOCAL_HOST
+.Pq 0xfffffffd
+The host itself.
+.It Dv NG_POLICY_EP_EXTERNAL
+.Pq 0xffffffff
+The endpoint an IPv4 address that the address map does not resolve is
+attributed to.
+.El
+.Pp
+Everything from
+.Dv NG_POLICY_EP_RESERVED_MIN
+.Pq 0xffffff00
+upward is reserved by the ABI.
+.Pp
+Endpoint flags are split by lifetime.
+.Dv NG_POLICY_EP_ENABLED
+and
+.Dv NG_POLICY_EP_TRUSTED
+are persistent configuration;
+.Dv NG_POLICY_EP_F_REPLACE
+is accepted on a request and never stored; and
+.Dv NG_POLICY_EP_S_CONNECTED
+and
+.Dv NG_POLICY_EP_S_PEER_CONNECTED
+are set by the kernel in list responses only.
+Note that
+.Dv NG_POLICY_EP_ENABLED
+is reserved and not enforced in this version:
+.Dv NGM_POLICY_ENDPOINT_DEL
+is the only way to disable an endpoint.
+.Sh OPERATING MODES
+.Bl -tag -width ".Dv NG_POLICY_MODE_PERMISSIVE"
+.It Dv NG_POLICY_MODE_DISABLED
+.Pq 0
+Frames are forwarded without any rule lookup.
+.It Dv NG_POLICY_MODE_PERMISSIVE
+.Pq 1
+Rules are evaluated and the outcome counted, but a frame that policy
+would have dropped is forwarded anyway and counted in
+.Va permissive_violations .
+.It Dv NG_POLICY_MODE_ENFORCE
+.Pq 2
+Rules are evaluated and enforced.
+.El
+.Pp
+The mode is set with
+.Dv NGM_POLICY_SET_MODE
+or through
+.Dv NGM_POLICY_SET_CONFIG ,
+and is node configuration rather than part of a policy generation.
+.Sh PACKET CLASSIFICATION
+Frames are classified before rule matching, and each class that is not
+ordinary IPv4 has its own configurable action in
+.Vt struct ng_policy_config :
+.Va arp_action ,
+.Va frag_action ,
+.Va unsupported_action
+and
+.Va malformed_action .
+.Pp
+ARP is handled outside L4 policy entirely.
+Non-initial IPv4 fragments never reach rule matching, because the
+ports they would be matched on are not present in them.
+EtherTypes other than IPv4 and ARP, VLAN-tagged frames included, take
+.Va unsupported_action .
+A frame too short or otherwise inconsistent for its claimed headers
+takes
+.Va malformed_action .
+.Pp
+An IPv4 protocol number that is not TCP, UDP or ICMP is
+.Em not
+classed unsupported: it is matched by rule, against rules whose
+.Va protocol
+is that number or
+.Dv NG_POLICY_PROTO_ANY ,
+with the port fields treated as the full range.
+.Sh RULES AND MATCHING
+A rule is
+.Vt struct ng_policy_rule ,
+32 bytes with no implicit padding.
+Matching is first-match wins over a set ordered by
+.Va priority
+ascending, ties broken by the order the rules were added within the
+transaction.
+.Pp
+A rule matches when the source and destination endpoints, the protocol,
+and the source and destination port ranges all match.
+.Dv NG_POLICY_EP_ANY
+in either endpoint field is a wildcard, as is
+.Dv NG_POLICY_PROTO_ANY
+in
+.Va protocol
+and a port range of
+.Bq Dv NG_POLICY_PORT_ANY_MIN , NG_POLICY_PORT_ANY_MAX .
+.Pp
+ICMP type and code are matched through the dedicated
+.Va icmp_type
+and
+.Va icmp_code
+fields, each enabled by its own flag
+.Pq Dv NG_POLICY_RULE_F_ICMP_TYPE , NG_POLICY_RULE_F_ICMP_CODE ,
+never by overloading the port ranges.
+.Pp
+Only
+.Dv NG_POLICY_ALLOW
+and
+.Dv NG_POLICY_DROP
+are accepted as actions.
+Values 3 through 7 are reserved for future REJECT, LOG, RATE_LIMIT,
+REDIRECT and MIRROR semantics and are rejected by this version rather
+than silently treated as something else.
+.Pp
+If no rule matches, the generation's default action applies, set with
+.Dv NGM_POLICY_TX_SET_DEFAULT .
+.Sh THE ADDRESS MAP
+Each generation carries a map from IPv4 address to endpoint identifier,
+used to attribute the far side of a frame.
+Addresses are in network byte order, and 0.0.0.0 is invalid.
+An address the map does not resolve is attributed to
+.Dv NG_POLICY_EP_EXTERNAL ,
+so an unmapped peer is a policy subject rather than a hole.
+.Pp
+With
+.Dv NG_POLICY_CFG_F_STRICT_ENDPOINTS
+set in the node configuration, rules are additionally validated against
+the registered endpoint table at commit time.
+.Sh POLICY GENERATIONS
+Policy is replaced wholesale, never edited in place.
+A generation is built in a transaction and committed with a single
+pointer swap, so a frame observes generation
+.Em N
+in full or
+.Em N+1
+in full and never a mixture.
+.Bl -tag -width ".Dv NGM_POLICY_TX_SET_DEFAULT"
+.It Dv NGM_POLICY_TX_BEGIN
+Opens a transaction and returns its
+.Va tx_id ,
+the generation number it will produce, the currently active generation
+and the deadline in seconds.
+A
+.Va requested_generation
+of 0 means the active generation plus one; a
+.Va timeout
+of 0 means
+.Va net.graph.policy.tx_timeout .
+.It Dv NGM_POLICY_TX_ADD_RULE
+Adds a batch of rules.
+.It Dv NGM_POLICY_TX_ADD_ADDR
+Adds a batch of address-map entries.
+.It Dv NGM_POLICY_TX_SET_DEFAULT
+Sets the generation's default action.
+.It Dv NGM_POLICY_TX_COMMIT
+Commits.
+.Va base_generation
+must equal the active generation, or the commit is refused with
+.Er ESTALE
+and nothing changes \(em optimistic concurrency, so that two writers
+cannot silently lose one another's work.
+.Dv NG_POLICY_TXC_F_FORCE
+overrides that check.
+The response reports the new generation, the memory the snapshot
+occupies, the rule and address counts, and the build, validate, commit
+and reclaim costs in microseconds.
+.It Dv NGM_POLICY_TX_ABORT
+Discards a transaction and its memory.
+.El
+.Pp
+Rules and addresses are batched because a hundred thousand single-rule
+messages is not a design.
+A transaction left open past its deadline is reaped automatically and
+counted in
+.Va tx_timeouts .
+.Sh CONTROL MESSAGES
+All messages use the
+.Dv NGM_POLICY_COOKIE
+type cookie.
+The versioned request structures carry a
+.Va version
+field in which 0 means
+.Dq current ABI ,
+so that
+.Xr ngctl 8
+stays usable for hand debugging without typing a version every time; any
+other value must equal
+.Dv NG_POLICY_ABI_VERSION
+or the message is rejected with
+.Er EINVAL .
+.Pp
+The ASCII names below are what
+.Xr ngctl 8
+accepts.
+.Bl -tag -width ".Cm getendpointstats"
+.It Cm getconfig , setconfig
+Read and write
+.Vt struct ng_policy_config :
+mode and the four per-class actions.
+The default action is not here; it belongs to the generation.
+.It Cm setmode
+Set the operating mode alone.
+.It Cm endpointadd , endpointdel
+Register and unregister an endpoint.
+.It Cm endpointlist
+Enumerate endpoints, windowed.
+.It Cm txbegin , txaddrule , txaddaddr , txsetdefault , txcommit , txabort
+Build and commit a generation, as above.
+.It Cm getstats , resetstats
+Read and reset node-wide counters.
+.It Cm getendpointstats
+Per-endpoint counters.
+.It Cm getrulestats
+Per-rule match counters, windowed.
+.El
+.Ss Response paging
+.Dv NGM_POLICY_ENDPOINT_LIST
+and
+.Dv NGM_POLICY_GET_RULE_STATS
+return windowed responses: the caller passes
+.Va start_index
+and
+.Va max_entries ,
+and the reply carries
+.Va total ,
+.Va returned
+and
+.Va next_index
+to continue from.
+.Pp
+A single response never exceeds
+.Dv NG_POLICY_BATCH_MAX
+.Pq 512
+entries, and each handler additionally clamps its entry count so that
+the whole reply fits
+.Dv NG_POLICY_RESP_BYTE_BUDGET
+.Pq 20480 bytes ,
+which is the default
+.Va net.graph.recvspace
+bound on a single netgraph control datagram.
+A caller asking for more than fits simply gets a smaller page and keeps
+paging.
+The module cannot observe an individual caller's socket options, so a
+caller that has raised
+.Va net.graph.recvspace
+is still served pages sized off the default and merely pages more often.
+.Sh SYSCTL VARIABLES
+.Bl -tag -width ".Va net.graph.policy.debug_force_copy"
+.It Va net.graph.policy.max_endpoints
+Maximum endpoints per node.
+Default 65536.
+.It Va net.graph.policy.max_rules
+Maximum rules per generation.
+Default 262144.
+.It Va net.graph.policy.max_addrs
+Maximum address-map entries per generation.
+Default 262144.
+.It Va net.graph.policy.max_tx
+Maximum concurrent open transactions per node.
+Default 16.
+.It Va net.graph.policy.max_tx_bytes
+Maximum memory all open transactions on a node may hold.
+Default 67108864.
+.It Va net.graph.policy.tx_timeout
+Default transaction deadline in seconds.
+Default 60.
+.It Va net.graph.policy.debug_force_copy
+Force the mbuf-copy path in the parser, for testing.
+Default 0.
+.It Va net.graph.policy.nodes
+Number of
+.Nm
+nodes currently constructed.
+Read-only.
+.It Va net.graph.policy.commits , net.graph.policy.failed_commits
+Module-wide commit counters.
+Read-only.
+.El
+.Sh STATISTICS
+.Dv NGM_POLICY_GET_STATS
+returns
+.Vt struct ng_policy_stats :
+the active generation, packet and byte totals, the allowed, dropped,
+permissive-violation, malformed, unsupported, fragmented, ARP,
+unbound-hook and no-peer counts, rule and default match counts, address
+lookups and hits, commit, failed-commit, abort and timeout counts, the
+current mode, the endpoint, rule, address and transaction counts, and
+the memory held by the policy snapshot, open transactions, the endpoint
+table and the address map.
+.Pp
+The node-wide invariant is
+.Pp
+.Dl packets_total == allowed_packets + dropped_packets + no_peer_packets
+.Pp
+and it is checked by the module's own test suite under concurrent
+policy replacement.
+.Sh EXAMPLES
+Create a node, read its configuration, and tear it down.
+Note the fail-closed starting state in the reply:
+.Pq Va mode=2 , enforce
+with a default action of drop.
+.Bd -literal -offset indent
+doas ngctl -f - <<'EOF'
+mkpeer policy ctl ctl0
+name .:ctl pol0
+msg pol0: getconfig
+shutdown pol0:
+EOF
+.Ed
+.Pp
+Register two endpoints and commit one generation permitting
+.Li 1001 -> 2001
+on TCP port 443.
+Two rules, not one:
+.Nm
+is stateless, so allowing the forward direction does not permit the
+replies.
+.Pp
+Each
+.Cm txaddrule
+adds a batch and they accumulate, so the two rules are sent as two
+messages here purely for legibility.
+Note that
+.Xr ngctl 8
+has no line-continuation syntax: a message must be one line, however
+long.
+.Bd -literal -offset indent
+doas ngctl -f - <<'EOF'
+mkpeer policy ctl ctl0
+name .:ctl pol0
+msg pol0: endpointadd { endpoint_id=1001 hook="ep-1001" peer_hook="fab-1001" }
+msg pol0: endpointadd { endpoint_id=2001 hook="ep-2001" peer_hook="fab-2001" }
+msg pol0: txbegin { }
+msg pol0: txaddrule { tx_id=1 nrules=1 rules=[ { rule_id=1 src_endpoint=1001 dst_endpoint=2001 src_port_min=0 src_port_max=65535 dst_port_min=443 dst_port_max=443 priority=10 protocol=6 action=1 } ] }
+msg pol0: txaddrule { tx_id=1 nrules=1 rules=[ { rule_id=2 src_endpoint=2001 dst_endpoint=1001 src_port_min=443 src_port_max=443 dst_port_min=0 dst_port_max=65535 priority=10 protocol=6 action=1 } ] }
+msg pol0: txaddaddr { tx_id=1 naddrs=1 addrs=[ { ipv4=10.0.0.5 endpoint_id=1001 } ] }
+msg pol0: txsetdefault { tx_id=1 default_action=2 }
+msg pol0: txcommit { tx_id=1 base_generation=0 }
+msg pol0: getstats
+shutdown pol0:
+EOF
+.Ed
+.Pp
+The commit reports what it built:
+.Bd -literal -offset indent
+Rec'd response "txcommit" (11) from "[374]:":
+Args:	{ generation=1 memory=472 build_usec=1 nrules=2 naddrs=1 }
+.Ed
+.Pp
+.Xr ngctl 8
+aborts the whole script at the first message that fails, so a
+.Cm txcommit
+refused with
+.Er ESTALE
+stops the script rather than leaving a half-applied policy.
+.Sh DIAGNOSTICS
+Control messages fail with:
+.Bl -tag -width ".Er ETIMEDOUT"
+.It Er EINVAL
+A malformed or inconsistent request: an unknown ABI version, a reserved
+endpoint identifier where a real one was required, an action outside
+.Dv NG_POLICY_ALLOW
+and
+.Dv NG_POLICY_DROP ,
+a port list on a protocol that has no ports, an unset flag bit, or a
+count that disagrees with the array that follows it.
+.It Er ENOENT
+A named endpoint, transaction or rule does not exist.
+.It Er EEXIST
+An endpoint with that identifier is already registered, and
+.Dv NG_POLICY_EP_F_REPLACE
+was not set.
+.It Er EBUSY
+A hook is already bound, or a transaction is in a state that forbids the
+operation.
+.It Er ENOSPC
+A configured limit would be exceeded: see the
+.Va max_*
+sysctls above.
+.It Er ENOMEM
+Allocation failed.
+.It Er ESTALE
+.Dv NGM_POLICY_TX_COMMIT
+with a
+.Va base_generation
+that is not the active generation.
+Re-observe the active generation and recompute; never retry blindly.
+.El
+.Sh SEE ALSO
+.Xr netgraph 4 ,
+.Xr ng_bridge 4 ,
+.Xr ng_ether 4 ,
+.Xr ng_socket 4 ,
+.Xr ngctl 8
+.Pp
+The module's own documentation set, under
+.Pa docs/
+in its source distribution, covers the architecture, the complete
+control API, every packet outcome, the policy and endpoint models,
+concurrency, statistics, security, measured performance and worked
+.Xr ngctl 8
+sessions.
+.Sh HISTORY
+The
+.Nm
+node type first appeared in August 2026.
+It is maintained out of the
+.Fx
+source tree.
+.Sh AUTHORS
+.An zombocoder Aq Mt zombocoder@gmail.com
+.Sh CAVEATS
+This version is stateless.
+There is no connection table, so a rule permitting traffic in one
+direction says nothing about the replies, and both directions of an
+intended conversation must be emitted as separate rules.
+.Pp
+Only IPv4 is classified for L4 policy.
+The address map carries 4-byte addresses, and IPv6 is not supported.
+.Pp
+.Xr tun 4
+and
+.Xr ng_iface 4
+interfaces cannot participate.
+.Nm
+classifies traffic by parsing Ethernet frames, and neither device
+carries Ethernet framing, so
+.Xr ng_ether 4
+attaches no netgraph node to them and there is no hook to wire
+.Nm
+into.

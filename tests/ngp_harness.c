@@ -104,7 +104,7 @@ ngp_msg_resp(struct ngp_ctx *c, int cmd, const void *arg, size_t arglen,
 	 * match: commit cab0ba4 hit exactly this failure mode (a stale
 	 * reply consumed by the wrong caller, misread as "node stopped
 	 * responding") in the fuzzer's control drain, and this helper had
-	 * the same unguarded assumption -- every one of the 59 tests that
+	 * the same unguarded assumption -- every one of the 62 tests that
 	 * call it relies on this loop rather than on FIFO order alone.
 	 */
 	for (;;) {

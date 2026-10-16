@@ -164,7 +164,7 @@ double-free may corrupt allocator metadata that only manifests as a
 crash much later, on an unrelated allocation; a lock misuse may produce
 a subtle ordering bug that never deadlocks in any particular test run.
 
-So, precisely, what the 59-test suite, the fuzzer, and
+So, precisely, what the 62-test suite, the fuzzer, and
 `tests/ngp_stress.sh` establish:
 
 - **No panic** during the runs actually performed.

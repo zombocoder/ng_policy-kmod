@@ -28,6 +28,23 @@ Builds `tests/ngp_test`, `tests/ngp_fuzz`, `tests/ngp_bench` (all link
 `-lnetgraph`; `ngp_test` additionally links `-lpthread` for its
 concurrency tests). Also `-Werror`.
 
+```sh
+make
+```
+
+Descends into `src`, `man` and `tests`. `doas make install` puts the
+module in `/boot/modules` (running `kldxref`, so `kldload ng_policy`
+then works by name) and `man/ng_policy.4` in `/usr/share/man/man4`.
+
+The man page lives in `man/` with its own `Makefile` rather than
+alongside the sources because `sys/conf/kmod.mk` has no man-page
+handling at all — a `MAN=` in a kmod `Makefile` is silently ignored.
+The FreeBSD tree separates them the same way, keeping netgraph pages
+in `share/man/man4/` and the modules under `sys/netgraph/`. That
+`Makefile` includes `bsd.prog.mk` with no `PROG`, which is the
+man-page-only pattern `share/man/man4/` itself uses; `bsd.man.mk`
+refuses to be included directly.
+
 ## Load / unload
 
 ```sh
@@ -39,11 +56,11 @@ doas kldunload ng_policy
 ## Run the tests
 
 ```sh
-doas ./tests/ngp_test               # all 59 cases
+doas ./tests/ngp_test               # all 62 cases
 doas ./tests/ngp_test <case_name>   # a single case, e.g. rule_priority
 ```
 
-Expect `59 run, 0 failed`. The module must already be built (loading is
+Expect `62 run, 0 failed`. The module must already be built (loading is
 handled by the harness itself per test — each test creates and tears
 down its own throwaway node).
 
@@ -105,7 +122,7 @@ doas kldunload ng_policy
 vmstat -m | grep -c ng_policy
 ```
 
-Expect `59 run, 0 failed`; the fuzzer survives to its final summary
+Expect `62 run, 0 failed`; the fuzzer survives to its final summary
 line; the stress script exits 0 with the in-use count returned to
 baseline; the benchmark prints both tables; the final `grep -c` prints
 `0` (no `ng_policy` malloc-type entries remain once the module is
@@ -130,10 +147,13 @@ src/
   ng_policy_stats.c       counter allocation/init/fini, GET_STATS/GET_RULE_STATS
                          aggregation, RESET_STATS
   Makefile
+man/
+  ng_policy.4              the reference page; see the note under Build
+  Makefile
 tests/
   ngp_harness.{c,h}       shared setup/teardown, message helpers, frame builders,
                          used by all three test binaries
-  ngp_test.c               59 functional/behavioural test cases (ngp_cases[])
+  ngp_test.c               62 functional/behavioural test cases (ngp_cases[])
   ngp_fuzz.c               seeded control- and packet-path fuzzer
   ngp_bench.c              commit-cost and lookup-cost benchmarks
   ngp_stress.sh            leak-checking create/destroy cycle script

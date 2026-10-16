@@ -52,11 +52,12 @@ someone experimenting by hand — see the opening of
 ## Build and test
 
 ```sh
+make                                   # src, man and tests
 make -C src                            # build ng_policy.ko, -Werror clean
 make -C tests                          # build ngp_test / ngp_fuzz / ngp_bench
 
 doas kldload ./src/ng_policy.ko
-doas ./tests/ngp_test                  # 59 run, 0 failed
+doas ./tests/ngp_test                  # 62 run, 0 failed
 doas ./tests/ngp_fuzz 12345 200000     # seeded control- and packet-path fuzzing
 doas sh tests/ngp_stress.sh ./src/ng_policy.ko 50   # leak check
 doas ./tests/ngp_bench                 # commit-cost and lookup-cost tables
@@ -64,10 +65,28 @@ doas kldunload ng_policy
 vmstat -m | grep -c ng_policy          # expect 0 — nothing leaked
 ```
 
+`ngp_test` needs `ng_policy` loaded and needs to run as root; it says
+which one is missing and exits 2 rather than failing every case.
+
+To install rather than load by path — the module into `/boot/modules`
+with `kldxref` run, and the man page into `/usr/share/man/man4` — so
+that `kldload ng_policy` works by name:
+
+```sh
+doas make install
+man 4 ng_policy
+```
+
 Full details, including how to add a new control message end to end:
 [`docs/development.md`](docs/development.md).
 
 ## Documentation
+
+[`man/ng_policy.4`](man/ng_policy.4) is the reference page — the node
+type, hooks, endpoint identity, modes, packet classification, rule
+matching, generations, every control message, the sysctls, the errno
+values and worked `ngctl` sessions. Read it first; the documents below
+go deeper than a man page should.
 
 | Document | Covers |
 |---|---|
@@ -162,6 +181,6 @@ respective bug, and continued passing when the *other* command's bug
 was live but their own was not. Both bugs were then reverted (`git
 diff` against `src/` confirmed byte-identical to
 the committed source before rebuilding the clean module), and the full
-59-test suite passes, with and without
+62-test suite passes, with and without
 `net.graph.policy.debug_force_copy`. See the task report for the full
 break/rebuild/fail/revert/pass transcript.
