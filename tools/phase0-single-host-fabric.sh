@@ -149,11 +149,11 @@ for mod in ng_ether ng_socket; do
 	fi
 done
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-NGP_KO="$SCRIPT_DIR/../src/ng_policy.ko"
+NGP_KO="$SCRIPT_DIR/../sys/netgraph/ng_policy/ng_policy.ko"
 if ! kldstat -q -m ng_policy 2>/dev/null; then
 	if [ ! -f "$NGP_KO" ]; then
 		echo "$0: ng_policy.ko not found at $NGP_KO -- build it first" >&2
-		echo "  (make -C src)." >&2
+		echo "  (make -C sys/netgraph/ng_policy)." >&2
 		exit 1
 	fi
 	kldload "$NGP_KO"

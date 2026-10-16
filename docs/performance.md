@@ -364,8 +364,8 @@ one of them at a known rate, which is out of scope for this script.
 ## Reproducing
 
 ```sh
-make -C src
-doas kldload src/ng_policy.ko   # if not already loaded
+make -C sys/netgraph/ng_policy
+doas kldload sys/netgraph/ng_policy/ng_policy.ko   # if not already loaded
 make -C tests
 doas tests/ngp_bench
 ```

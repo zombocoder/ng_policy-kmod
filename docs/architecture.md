@@ -23,7 +23,7 @@ policies means running multiple `ng_policy` nodes.
 
 The node is created with `mkpeer` / `ngctl` like any other Netgraph
 node type, and holds no state outside what the constructor allocates
-(`src/ng_policy.c:ng_policy_constructor`) — no
+(`sys/netgraph/ng_policy/ng_policy.c:ng_policy_constructor`) — no
 files, no external database, no persistence across a reload. Everything
 the node knows was told to it over its control socket since the last
 `kldload`.
@@ -152,7 +152,7 @@ to `ng_policy` itself would be a different module.
 ## Source layout
 
 ```
-src/
+sys/netgraph/ng_policy/
   ng_policy.h           public constants: node type, actions, modes, reserved IDs
   ng_policy_msg.h        public control ABI: cookie, commands, structures, ng_parse types
   ng_policy_var.h        internal structures shared across the .c files (not installed)

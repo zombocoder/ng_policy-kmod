@@ -1,6 +1,8 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
  * ng_policy - policy generations, transactions, atomic replacement.
  */
 
@@ -342,7 +344,8 @@ ng_policy_tx_add_rules(priv_p priv, uint64_t tx_id,
 	error = ngp_tx_grow(priv, tx, (void **)&tx->rules, &tx->rules_cap,
 	    tx->nrules + n, sizeof(*rules), ng_policy_max_rules);
 	if (error == 0) {
-		memcpy(&tx->rules[tx->nrules], rules, (size_t)n * sizeof(*rules));
+		memcpy(&tx->rules[tx->nrules], rules,
+		    (size_t)n * sizeof(*rules));
 		tx->nrules += n;
 	}
 	mtx_unlock(&priv->ctl_mtx);
@@ -375,7 +378,8 @@ ng_policy_tx_add_addrs(priv_p priv, uint64_t tx_id,
 	error = ngp_tx_grow(priv, tx, (void **)&tx->addrs, &tx->addrs_cap,
 	    tx->naddrs + n, sizeof(*addrs), ng_policy_max_addrs);
 	if (error == 0) {
-		memcpy(&tx->addrs[tx->naddrs], addrs, (size_t)n * sizeof(*addrs));
+		memcpy(&tx->addrs[tx->naddrs], addrs,
+		    (size_t)n * sizeof(*addrs));
 		tx->naddrs += n;
 	}
 	mtx_unlock(&priv->ctl_mtx);

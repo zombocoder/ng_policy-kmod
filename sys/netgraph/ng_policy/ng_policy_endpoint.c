@@ -1,6 +1,8 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
  * ng_policy - endpoint table and hook binding.
  */
 
@@ -123,7 +125,8 @@ ng_policy_ep_add(priv_p priv, const struct ng_policy_endpoint_add *req)
 		return (EINVAL);
 	if (!NG_POLICY_EP_ID_VALID(req->endpoint_id))
 		return (EINVAL);
-	if ((req->flags & ~(NG_POLICY_EP_CFG_MASK | NG_POLICY_EP_F_REPLACE)) != 0)
+	if ((req->flags &
+	    ~(NG_POLICY_EP_CFG_MASK | NG_POLICY_EP_F_REPLACE)) != 0)
 		return (EINVAL);
 	if (req->hook[0] == '\0')
 		return (EINVAL);

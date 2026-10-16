@@ -4,11 +4,11 @@ SRCS.ngp_fuzz=	ngp_fuzz.c ngp_harness.c
 SRCS.ngp_bench=	ngp_bench.c ngp_harness.c
 MAN=
 LDADD=	-lnetgraph
-# ${.CURDIR}/../include is include, which carries the
-# netgraph/ng_policy/ symlink shim (see src/Makefile) so
-# <netgraph/ng_policy/ng_policy.h> resolves from here the same way it
-# does for the kernel module build.
-CFLAGS+=	-I${.CURDIR} -I${.CURDIR}/../include
+# ${.CURDIR}/../sys is the include root for <netgraph/ng_policy/...>: the
+# headers live at sys/netgraph/ng_policy/, so that spelling resolves from
+# here exactly as it does for the kernel module build -- off the real
+# directory names, with no shim in the way.
+CFLAGS+=	-I${.CURDIR} -I${.CURDIR}/../sys
 # ngp_test deliberately over-allocates a variable-length response struct
 # by following it with a fixed-size array in an outer struct, e.g.
 # "struct { struct ng_policy_ep_list_resp r; struct ng_policy_endpoint_info

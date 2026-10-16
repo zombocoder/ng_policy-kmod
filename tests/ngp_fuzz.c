@@ -1,3 +1,11 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
+ * ng_policy - seeded control- and packet-path fuzzer.
+ */
+
 /*
  * ng_policy fuzzer.  Drives randomised control messages and randomised
  * frames through a live node.  Success is defined negatively: the

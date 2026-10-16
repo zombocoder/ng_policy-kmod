@@ -1,6 +1,8 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
  * ng_policy - identity-aware network policy enforcement for Netgraph.
  *
  * Public constants.  This header is safe to include from userland.
@@ -92,9 +94,11 @@ enum ng_policy_mode {
 #define	NG_POLICY_PORT_ANY_MIN	0
 #define	NG_POLICY_PORT_ANY_MAX	65535
 
-/* Largest number of entries any single windowed response returns,
-   before the per-response-type byte-budget clamp below narrows it
-   further. */
+/*
+ * Largest number of entries any single windowed response returns,
+ * before the per-response-type byte-budget clamp below narrows it
+ * further.
+ */
 #define	NG_POLICY_BATCH_MAX	512
 
 /*

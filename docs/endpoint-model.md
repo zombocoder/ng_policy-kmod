@@ -133,7 +133,7 @@ clear behaves identically to one with it set. This was an explicit
 ruling during implementation (recorded in the project's SDD ledger,
 Ruling R1): the requirements ask only that flags without a clear
 enforced semantics be avoided from having one invented, no completion
-criterion covers "disable an endpoint without deleting it," and no
+row covers "disable an endpoint without deleting it," and no
 test in the plan exercises enforcement — inventing behaviour nothing
 verifies would be worse than leaving the bit reserved. The practical
 consequence: a controller that wants to temporarily stop traffic for

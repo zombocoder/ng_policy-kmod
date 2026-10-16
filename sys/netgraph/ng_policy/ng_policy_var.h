@@ -1,3 +1,11 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
+ * ng_policy - internal structures shared across the module.
+ */
+
 #ifndef _NETGRAPH_NG_POLICY_VAR_H_
 #define _NETGRAPH_NG_POLICY_VAR_H_
 
@@ -61,7 +69,8 @@ struct ng_policy_tx {
 	uint64_t	generation;
 	uint8_t		default_action;
 	uint8_t		has_default;
-	uint8_t		committing;	/* validate/build in progress, unlocked */
+	/* Validate/build in progress, unlocked. */
+	uint8_t		committing;
 	uint32_t	nrules, rules_cap;
 	struct ng_policy_rule *rules;
 	uint32_t	naddrs, addrs_cap;
@@ -74,7 +83,8 @@ struct ng_policy_tx {
 #define	NGP_EPHASH(id)	((id) & (NGP_EPHASH_SIZE - 1))
 
 #define	NGP_SIDE_NONE	0
-#define	NGP_SIDE_EP	1	/* workload side: ingress means "from endpoint" */
+/* Workload side: ingress means "from endpoint". */
+#define	NGP_SIDE_EP	1
 #define	NGP_SIDE_FAB	2	/* fabric side: ingress means "to endpoint" */
 
 struct ng_policy_hookpriv {
@@ -87,12 +97,14 @@ struct ng_policy_hookpriv {
 
 struct ng_policy_ep {
 	LIST_ENTRY(ng_policy_ep) hashlink;	/* id hash */
-	TAILQ_ENTRY(ng_policy_ep) alllink;	/* insertion order, for listing */
+	/* Insertion order, for listing. */
+	TAILQ_ENTRY(ng_policy_ep) alllink;
 	uint32_t		endpoint_id;
 	uint32_t		flags;
 	char			hook[NG_HOOKSIZ];
 	char			peer_hook[NG_HOOKSIZ];
-	struct ng_policy_hookpriv *hp;		/* workload-side hook, or NULL */
+	/* Workload-side hook, or NULL. */
+	struct ng_policy_hookpriv *hp;
 	struct ng_policy_hookpriv *peer_hp;	/* fabric-side hook, or NULL */
 	counter_u64_t		rx_packets, rx_bytes;
 	counter_u64_t		tx_packets, tx_bytes;
@@ -225,9 +237,11 @@ int	ng_policy_tx_commit(priv_p, const struct ng_policy_tx_commit_req *,
 	    struct ng_policy_tx_commit_resp *);
 int	ng_policy_tx_abort(priv_p, uint64_t tx_id);
 void	ng_policy_tx_reap(priv_p, int force);
-/* Returns the matching rule, or NULL for no match.  On a match, *idx
-   receives the rule's index in sn->rules, for counter attribution.
-   Must be called inside the net epoch. */
+/*
+ * Returns the matching rule, or NULL for no match.  On a match, *idx
+ * receives the rule's index in sn->rules, for counter attribution.
+ * Must be called inside the net epoch.
+ */
 const struct ng_policy_rule *ng_policy_match(
 	    const struct ng_policy_snapshot *sn,
 	    const struct ng_policy_meta *meta, uint32_t *idx);
@@ -241,8 +255,10 @@ extern u_int ng_policy_max_tx;
 extern u_long ng_policy_max_tx_bytes;
 extern u_int ng_policy_tx_timeout;
 
-/* Module-scoped diagnostic counters: they outlive any individual node,
-   so they live at module scope rather than in priv_p. */
+/*
+ * Module-scoped diagnostic counters: they outlive any individual node,
+ * so they live at module scope rather than in priv_p.
+ */
 extern counter_u64_t ng_policy_g_nodes;
 extern counter_u64_t ng_policy_g_commits;
 extern counter_u64_t ng_policy_g_failed_commits;

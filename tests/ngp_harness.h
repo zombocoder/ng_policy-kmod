@@ -1,3 +1,11 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
+ * ng_policy test harness - shared declarations.
+ */
+
 #ifndef NGP_HARNESS_H
 #define NGP_HARNESS_H
 
@@ -49,8 +57,10 @@ int	ngp_commit(struct ngp_ctx *c, uint64_t tx_id, uint64_t base,
 int	ngp_setdef(struct ngp_ctx *c, uint64_t tx_id, uint8_t act);
 
 size_t	ngp_eth(uint8_t *b, uint16_t ethertype);
-size_t	ngp_tcp(uint8_t *b, uint32_t sip, uint32_t dip, uint16_t sp, uint16_t dp);
-size_t	ngp_udp(uint8_t *b, uint32_t sip, uint32_t dip, uint16_t sp, uint16_t dp);
+size_t	ngp_tcp(uint8_t *b, uint32_t sip, uint32_t dip, uint16_t sp,
+	    uint16_t dp);
+size_t	ngp_udp(uint8_t *b, uint32_t sip, uint32_t dip, uint16_t sp,
+	    uint16_t dp);
 size_t	ngp_icmp(uint8_t *b, uint32_t sip, uint32_t dip, uint8_t type,
 	    uint8_t code);
 size_t	ngp_arp(uint8_t *b);

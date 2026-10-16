@@ -68,7 +68,7 @@ reverted — see the project's SDD ledger) therefore computes a bogus
 element budget during `ASCII2BINARY` and rejects legitimate hand-typed
 input with `E2BIG` — breaking exactly the workflow
 [`ngctl-examples.md`](ngctl-examples.md) depends on and that
-completion criterion §99.27 requires (`ngctl` standalone operation,
+row 27 of the README table requires (`ngctl` standalone operation,
 including hand-typed rule loading). A `getLength` callback has no
 parameter that tells it which direction it is being called from, so it
 cannot apply the bound only where the bound is meaningful.
@@ -150,7 +150,7 @@ pseudorandom ones triggered one.
 ## What "no panic, no hang, no leak" does and does not establish
 
 **This kernel is built with `INVARIANTS` disabled**
-(`src/opt_global.h` — the compiled option set has
+(`sys/netgraph/ng_policy/opt_global.h` — the compiled option set has
 `SMP`, `MAC`, `VIMAGE`, `EARLY_AP_STARTUP`, `CC_CUBIC`, `NEW_PCIB`, and
 `NETLINK`, and nothing else; no `INVARIANTS`, no `WITNESS`, no
 `INVARIANT_SUPPORT`). This has a direct consequence for how much a

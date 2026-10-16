@@ -14,10 +14,10 @@ available. All commands below are run from this repository's root.
 ## Build
 
 ```sh
-make -C src
+make -C sys/netgraph/ng_policy
 ```
 
-Builds `src/ng_policy.ko`. Clean at `-Werror`; no
+Builds `sys/netgraph/ng_policy/ng_policy.ko`. Clean at `-Werror`; no
 warnings is the bar, not merely "compiles."
 
 ```sh
@@ -48,7 +48,7 @@ refuses to be included directly.
 ## Load / unload
 
 ```sh
-doas kldload ./src/ng_policy.ko
+doas kldload ./sys/netgraph/ng_policy/ng_policy.ko
 doas kldstat | grep policy      # confirm it's loaded
 doas kldunload ng_policy
 ```
@@ -92,7 +92,7 @@ caveats about what the absolute lookup numbers do and do not measure.
 ## Leak checking
 
 ```sh
-doas sh tests/ngp_stress.sh ./src/ng_policy.ko 50
+doas sh tests/ngp_stress.sh ./sys/netgraph/ng_policy/ng_policy.ko 50
 ```
 
 Loads the module, runs 50 (or however many are given) node
@@ -110,13 +110,13 @@ no live node yet showing blank is expected, not a bug in the script.
 The exact sequence this project's own completion gate runs:
 
 ```sh
-make -C src
+make -C sys/netgraph/ng_policy
 make -C tests
 doas kldunload ng_policy 2>/dev/null || true
-doas kldload ./src/ng_policy.ko
+doas kldload ./sys/netgraph/ng_policy/ng_policy.ko
 doas ./tests/ngp_test
 doas ./tests/ngp_fuzz 12345 200000
-doas sh tests/ngp_stress.sh ./src/ng_policy.ko 50
+doas sh tests/ngp_stress.sh ./sys/netgraph/ng_policy/ng_policy.ko 50
 doas ./tests/ngp_bench
 doas kldunload ng_policy
 vmstat -m | grep -c ng_policy
@@ -131,7 +131,7 @@ unloaded).
 ## Source layout and each file's responsibility
 
 ```
-src/
+sys/netgraph/ng_policy/
   ng_policy.h           public constants: node type, actions, modes, reserved endpoint IDs
   ng_policy_msg.h        public control ABI: cookie, opcodes, wire structs, ng_parse TYPE_INFO macros
   ng_policy_var.h        internal structures shared across the .c files; not installed

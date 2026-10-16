@@ -1,0 +1,19 @@
+ng_policy is a FreeBSD Netgraph node type that performs stateless,
+identity-aware policy enforcement on Ethernet frames.
+
+It registers endpoints -- each a pair of hooks, a workload side and a
+fabric side -- evaluates every frame crossing one of those hooks against
+a precompiled, priority-ordered rule set, and either forwards the frame
+to the endpoint's other hook or drops it.
+
+The module compiles nothing itself.  Rules, endpoint registrations and an
+IPv4-to-endpoint address map arrive over its own Netgraph control socket
+already in binary form, and are swapped into place atomically as a single
+immutable generation under an optimistic concurrency check.  Deciding
+what a rule should say -- translating tenant intent, security groups or
+labels into endpoint identifiers and IPv4 rules -- is a userland concern
+outside this module.
+
+A freshly constructed node is at generation 0 with a default action of
+DROP in ENFORCE mode: it is fail-closed by construction and blocks all
+traffic until a policy generation is committed.

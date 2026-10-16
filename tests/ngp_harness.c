@@ -1,3 +1,11 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
+ * ng_policy test harness - setup, messaging and frame builders.
+ */
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -288,7 +296,8 @@ ngp_install(struct ngp_ctx *c, const struct ng_policy_rule *rules,
 }
 
 int
-ngp_begin(struct ngp_ctx *c, struct ng_policy_tx_begin_resp *b, uint32_t timeout)
+ngp_begin(struct ngp_ctx *c, struct ng_policy_tx_begin_resp *b,
+    uint32_t timeout)
 {
 	struct ng_policy_tx_begin_req req;
 

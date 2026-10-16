@@ -2,7 +2,7 @@
 
 This document walks every outcome `ng_policy_rcvdata()` can produce, one
 case at a time, each with its own flow. The full decision function is
-`ngp_decide()` in `src/ng_policy.c`; parsing is
+`ngp_decide()` in `sys/netgraph/ng_policy/ng_policy.c`; parsing is
 `ng_policy_parse()` in `ng_policy_packet.c`; matching is
 `ng_policy_match()` in `ng_policy_policy.c`. For the rule semantics
 (priority, wildcards, statelessness) see

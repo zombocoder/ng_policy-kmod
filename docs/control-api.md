@@ -1,7 +1,7 @@
 # Control API
 
 The wire format for every `NGM_POLICY_*` message. All structures and
-`ng_parse` type macros live in `src/ng_policy_msg.h`
+`ng_parse` type macros live in `sys/netgraph/ng_policy/ng_policy_msg.h`
 (public, installed) and are wired into `ngctl`'s ASCII parser in
 `ng_policy.c`'s `ng_policy_cmdlist[]`. For worked, executed examples see
 [`ngctl-examples.md`](ngctl-examples.md); for how a control message is

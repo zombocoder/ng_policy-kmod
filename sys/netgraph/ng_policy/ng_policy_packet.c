@@ -1,6 +1,8 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
  * ng_policy - packet parsing.
  *
  * Extracts only what a policy decision needs.  Never modifies the mbuf,

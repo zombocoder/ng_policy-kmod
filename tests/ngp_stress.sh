@@ -3,7 +3,7 @@
 # return to zero in use, or something is leaking.
 set -e
 
-MOD=${1:-./src/ng_policy.ko}
+MOD=${1:-./sys/netgraph/ng_policy/ng_policy.ko}
 CYCLES=${2:-50}
 
 # Raw reading, for the human-readable log lines below: vmstat -m omits a

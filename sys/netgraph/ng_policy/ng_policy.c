@@ -1,6 +1,8 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
  * ng_policy - identity-aware network policy enforcement for Netgraph.
  */
 
@@ -10,6 +12,24 @@ MALLOC_DEFINE(M_NG_POLICY, "ng_policy", "ng_policy data");
 
 static SYSCTL_NODE(_net_graph, OID_AUTO, policy, CTLFLAG_RW | CTLFLAG_MPSAFE,
     0, "ng_policy");
+
+/*
+ * The module version, reported so that it can be read off a running
+ * system instead of inferred from whatever source tree happens to be
+ * nearby.  This is not the control ABI version: that is
+ * NG_POLICY_ABI_VERSION, it travels in the versioned request structures,
+ * and the kernel rejects a mismatch.  The two move independently -- a
+ * release may change this and leave the ABI alone -- so a caller must
+ * never key compatibility off this string.  Both are exported because
+ * NG_POLICY_VERSION otherwise has no consumer at all, which is how it
+ * came to sit in the header unused.
+ */
+SYSCTL_STRING(_net_graph_policy, OID_AUTO, version, CTLFLAG_RD,
+    NG_POLICY_VERSION, 0, "Module version (not the control ABI version)");
+SYSCTL_INT(_net_graph_policy, OID_AUTO, abi_version, CTLFLAG_RD,
+    SYSCTL_NULL_INT_PTR, NG_POLICY_ABI_VERSION,
+    "Control ABI version accepted in versioned requests");
+
 u_int ng_policy_max_endpoints = 65536;
 SYSCTL_UINT(_net_graph_policy, OID_AUTO, max_endpoints, CTLFLAG_RW,
     &ng_policy_max_endpoints, 0, "Maximum endpoints per node");
@@ -185,7 +205,7 @@ static const struct ng_parse_type ng_policy_addr_type = {
  * A clamp keyed off msg->header.arglen (tried and reverted) computes a
  * bogus element budget during ASCII2BINARY and breaks hand-typed ngctl
  * rule loading -- e.g. "txaddrule { nrules=3 rules=[...] }" -- with
- * E2BIG, and hand-typed rule loading is a stated completion criterion.
+ * E2BIG, and hand-typed rule loading is a property the suite checks.
  * A correct, direction-aware fix belongs in ng_parse itself, not here.
  *
  * The residual over-read this leaves for a crafted NGM_BINARY2ASCII
@@ -222,8 +242,10 @@ static const struct ng_parse_type ng_policy_tx_add_rule_type = {
 	&ng_parse_struct_type, &ng_policy_tx_add_rule_fields
 };
 
-/* No length clamp here either: see the comment on ng_policy_rule_ary_len
-   above -- the same direction-ambiguity applies verbatim to naddrs. */
+/*
+ * No length clamp here either: see the comment on ng_policy_rule_ary_len
+ * above -- the same direction-ambiguity applies verbatim to naddrs.
+ */
 static int
 ng_policy_addr_ary_len(const struct ng_parse_type *type, const u_char *start,
     const u_char *buf)

@@ -112,11 +112,11 @@ done
 # standard /boot/modules search path, so it is loaded by explicit path
 # relative to this script -- the same path the project's own workflow
 # uses (see AGENTS.md / task briefs: "doas kldload
-# .../src/ng_policy.ko").  A bare "kldload -n
+# .../sys/netgraph/ng_policy/ng_policy.ko").  A bare "kldload -n
 # ng_policy" here would just fail with "module not found" and be more
 # confusing than useful.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-NGP_KO="$SCRIPT_DIR/../src/ng_policy.ko"
+NGP_KO="$SCRIPT_DIR/../sys/netgraph/ng_policy/ng_policy.ko"
 if ! kldstat -q -m ng_policy 2>/dev/null; then
 	if [ ! -f "$NGP_KO" ]; then
 		echo "bench-dataplane.sh: ng_policy is not loaded and" >&2

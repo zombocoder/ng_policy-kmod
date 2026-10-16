@@ -1,6 +1,8 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
  * ng_policy - control message ABI.
  *
  * The type cookie is the primary ABI guard.  Structures additionally
@@ -258,7 +260,10 @@ struct ng_policy_tx_begin_resp {
 	{ NULL }						\
 }
 
-/* Rules and addresses are batched: 100,000 single-rule messages is not a design. */
+/*
+ * Rules and addresses are batched: 100,000 single-rule messages is not
+ * a design.
+ */
 struct ng_policy_tx_add_rule {
 	uint64_t	tx_id;
 	uint16_t	version;
@@ -310,8 +315,10 @@ struct ng_policy_tx_set_default {
 	{ NULL }						\
 }
 
-/* Optimistic concurrency: the commit applies only if base_generation
-   equals the active generation, unless TXC_F_FORCE is set. */
+/*
+ * Optimistic concurrency: the commit applies only if base_generation
+ * equals the active generation, unless TXC_F_FORCE is set.
+ */
 struct ng_policy_tx_commit_req {
 	uint64_t	tx_id;
 	uint64_t	base_generation;

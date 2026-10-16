@@ -1,3 +1,11 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
+ * ng_policy - commit-cost and lookup-cost benchmarks.
+ */
+
 /*
  * ng_policy benchmarks.
  *
@@ -252,7 +260,10 @@ main(void)
 		for (i = 0; i < n; i++) {
 			r[i].rule_id = i + 1;
 			r[i].priority = (uint16_t)(i % 4096);
-			/* Non-matching rules, so the scan runs its full length. */
+			/*
+			 * Non-matching rules, so the scan runs its
+			 * full length.
+			 */
 			r[i].src_endpoint = 5000 + i;
 			r[i].action = NG_POLICY_DROP;
 			r[i].src_port_max = 65535;

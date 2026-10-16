@@ -52,17 +52,18 @@ someone experimenting by hand — see the opening of
 ## Build and test
 
 ```sh
-make                                   # src, man and tests
-make -C src                            # build ng_policy.ko, -Werror clean
-make -C tests                          # build ngp_test / ngp_fuzz / ngp_bench
+make                               # the module, the man page and the tests
+make -C sys/netgraph/ng_policy     # just ng_policy.ko, -Werror clean
+make -C tests                      # just ngp_test / ngp_fuzz / ngp_bench
 
-doas kldload ./src/ng_policy.ko
-doas ./tests/ngp_test                  # 62 run, 0 failed
-doas ./tests/ngp_fuzz 12345 200000     # seeded control- and packet-path fuzzing
-doas sh tests/ngp_stress.sh ./src/ng_policy.ko 50   # leak check
-doas ./tests/ngp_bench                 # commit-cost and lookup-cost tables
+KO=./sys/netgraph/ng_policy/ng_policy.ko
+doas kldload $KO
+doas ./tests/ngp_test              # 62 run, 0 failed
+doas ./tests/ngp_fuzz 12345 200000 # seeded control- and packet-path fuzzing
+doas sh tests/ngp_stress.sh $KO 50 # leak check
+doas ./tests/ngp_bench             # commit-cost and lookup-cost tables
 doas kldunload ng_policy
-vmstat -m | grep -c ng_policy          # expect 0 — nothing leaked
+vmstat -m | grep -c ng_policy      # expect 0 — nothing leaked
 ```
 
 `ngp_test` needs `ng_policy` loaded and needs to run as root; it says
@@ -103,22 +104,19 @@ go deeper than a man page should.
 | [`docs/development.md`](docs/development.md) | Build/load/test/fuzz/benchmark commands, source layout, and adding a new control message |
 | [`docs/phase0-single-host-fabric.md`](docs/phase0-single-host-fabric.md) | Manual proof (spec `vnetfabric` Phase 0): epair/tap attach identically, fail-closed, default-deny, cross-subnet routing with no custom routing code — and why `tun` cannot attach to `ng_policy` at all |
 
-## Completion criteria
+## What is verified, and by what
 
-The requirements' §99 lists thirty completion criteria. **Neither the
-source 100-section requirements document nor the design spec that
-summarised it is present in this repository.** The table below was
-reconstructed from that spec's summary (§14) and from a handful of
-criterion numbers cited directly in the project's own history
-(`§99.26` leaks, `§99.27` `ngctl` standalone operation, `§99.28`
-stable ABI), decomposed to line up with the numbers that are directly
-attested. It is this project's best-effort reconstruction — **not a
-verbatim transcription of text this repository does not contain**, and
-the sources it was built from cannot be consulted here. Where a row
-has no test that proves it, that is stated plainly rather than covered
-with a plausible-sounding claim.
+Thirty properties the module is meant to have, each paired with the
+thing that actually demonstrates it. **Where a row has no test that
+proves it, the row says so** rather than covering the gap with a
+plausible-sounding claim — which is the only reason a table like this
+is worth reading instead of being a list of assertions.
 
-| # | Criterion | Proven by |
+The numbering is this project's own. It originally tracked a section of
+a requirements document that is not part of this repository and cannot
+be consulted here, so the numbers index these rows and nothing else.
+
+| # | Property | Demonstrated by |
 |---|---|---|
 | 1 | Loads and unloads cleanly, with no leaks across the module lifecycle | `doas kldload`/`kldunload` + `test_node_lifecycle` + `vmstat -m | grep -c ng_policy` = 0 |
 | 2 | Enforces ALLOW/DROP for TCP | `test_policy_matrix`, `test_forward_ep_to_fab`, `test_forward_fab_to_ep` |
@@ -149,9 +147,9 @@ with a plausible-sounding claim.
 | 27 | Drivable standalone from `ngctl`, including hand-typed ASCII rule loading | `docs/ngctl-examples.md` — executed sessions, hand-typed `txaddrule` array literal |
 | 28 | Programmable by a daemon through a stable, versioned ABI (type cookie + `version` field) | The entire `tests/` suite drives the node exclusively through `libnetgraph`/the real `NGM_POLICY_COOKIE` ABI, exactly as a daemon would |
 | 29 | Benchmarked: commit and lookup cost reported honestly, including measurement noise | `tests/ngp_bench.c` + `docs/performance.md` |
-| 30 | Requires no jail-, bhyve-, tenant-, or VPC-specific knowledge | `grep -rli "jail\|bhyve\|tenant\|vpc" src/*.{c,h}` — no matches |
+| 30 | Requires no jail-, bhyve-, tenant-, or VPC-specific knowledge | `grep -rli "jail\|bhyve\|tenant\|vpc" sys/netgraph/ng_policy/*.{c,h}` — no matches |
 
-### Criterion 23 was a gap; closed
+### Row 23 was a gap; closed
 
 `ENDPOINT_LIST` and `GET_RULE_STATS` both implement `start_index`/
 `max_entries` windowing, clamped to `NG_POLICY_BATCH_MAX = 512` per
@@ -179,8 +177,19 @@ reloaded into the live kernel — `test_endpoint_list_pagination` and
 `test_rule_stats_pagination` failed exactly as expected against their
 respective bug, and continued passing when the *other* command's bug
 was live but their own was not. Both bugs were then reverted (`git
-diff` against `src/` confirmed byte-identical to
+diff` against `sys/netgraph/ng_policy/` confirmed byte-identical to
 the committed source before rebuilding the clean module), and the full
 62-test suite passes, with and without
-`net.graph.policy.debug_force_copy`. See the task report for the full
-break/rebuild/fail/revert/pass transcript.
+`net.graph.policy.debug_force_copy`.
+
+## Packaging
+
+[`port/`](port/) is a skeleton for `net/ng-policy`. It is not a
+finished port: `distinfo` has to be generated with `make makesum`
+against a real release tarball, which does not exist until a release is
+tagged, and nothing has been built in a clean jail. What is and is not
+verified about it is spelled out in [`port/README.md`](port/README.md).
+
+## License
+
+BSD-2-Clause. See [`LICENSE`](LICENSE).

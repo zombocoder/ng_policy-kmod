@@ -1,3 +1,11 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 zombocoder <zombocoder@gmail.com>
+ *
+ * ng_policy - functional and behavioural test suite.
+ */
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -119,8 +127,10 @@ test_endpoint_list_pagination(struct ngp_ctx *c)
 			ASSERT_EQ(id >= NGP_PAGE_EP_BASE &&
 			    id < NGP_PAGE_EP_BASE + NGP_PAGE_EP_N, 1);
 			idx = (int)(id - NGP_PAGE_EP_BASE);
-			/* Exactly once across the whole walk: fail loudly
-			   on a repeat rather than merely counting totals. */
+			/*
+			 * Exactly once across the whole walk: fail loudly
+			 * on a repeat rather than merely counting totals.
+			 */
 			ASSERT_EQ(seen[idx], 0);
 			seen[idx] = 1;
 			total_seen++;
@@ -130,8 +140,10 @@ test_endpoint_list_pagination(struct ngp_ctx *c)
 		if (start >= out.r.total)
 			break;
 	}
-	/* The walk must have actually terminated well inside the
-	   generous 10-iteration cap (3 pages expected), not looped. */
+	/*
+	 * The walk must have actually terminated well inside the
+	 * generous 10-iteration cap (3 pages expected), not looped.
+	 */
 	ASSERT_EQ(iter < 10, 1);
 	ASSERT_EQ(total_seen, NGP_PAGE_EP_N);
 	for (i = 0; i < NGP_PAGE_EP_N; i++)
@@ -199,7 +211,8 @@ test_endpoint_list_recvspace_ceiling(struct ngp_ctx *c)
 		memset(&q, 0, sizeof(q));
 		q.endpoint_id = NG_POLICY_EP_ANY;
 		q.start_index = start;
-		q.max_entries = 0;	/* "as many as fit" -- the documented default */
+		/* "As many as fit" -- the documented default. */
+		q.max_entries = 0;
 
 		/*
 		 * ng_policy_ep_list() sizes the response off `total`, not
@@ -240,8 +253,10 @@ test_endpoint_list_recvspace_ceiling(struct ngp_ctx *c)
 	ASSERT_EQ(total_seen, NGP_CEIL_EP_N);
 	for (i = 0; i < NGP_CEIL_EP_N; i++)
 		ASSERT_EQ(seen[i], 1);
-	/* Must actually have crossed the byte-budget ceiling, not merely
-	   fit in one generous page. */
+	/*
+	 * Must actually have crossed the byte-budget ceiling, not merely
+	 * fit in one generous page.
+	 */
 	ASSERT_EQ(pages >= 2, 1);
 	return (0);
 }
@@ -347,7 +362,10 @@ test_forward_ep_to_fab(struct ngp_ctx *c)
 	return (0);
 }
 
-/* And the reverse direction, which is how Mode A destination resolution works. */
+/*
+ * And the reverse direction, which is how Mode A destination resolution
+ * works.
+ */
 static int
 test_forward_fab_to_ep(struct ngp_ctx *c)
 {
@@ -504,8 +522,10 @@ test_reset_stats(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Rejecting a truncated payload is the cheapest defence against a hostile
-   controller, so assert it explicitly rather than trusting the dispatcher. */
+/*
+ * Rejecting a truncated payload is the cheapest defence against a hostile
+ * controller, so assert it explicitly rather than trusting the dispatcher.
+ */
 static int
 test_short_message_rejected(struct ngp_ctx *c)
 {
@@ -520,7 +540,10 @@ test_short_message_rejected(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Each category must be independently steerable, so drive them one at a time. */
+/*
+ * Each category must be independently steerable, so drive them one at a
+ * time.
+ */
 static int
 ngp_cfg_actions(struct ngp_ctx *c, uint8_t arp, uint8_t frag, uint8_t unsup,
     uint8_t malformed)
@@ -594,8 +617,10 @@ test_arp_action(struct ngp_ctx *c)
 	return (0);
 }
 
-/* VLAN is unsupported in v0.1 and must take the unsupported action, not
-   silently bypass policy. */
+/*
+ * VLAN is unsupported in v0.1 and must take the unsupported action, not
+ * silently bypass policy.
+ */
 static int
 test_unsupported_ethertype(struct ngp_ctx *c)
 {
@@ -670,10 +695,12 @@ test_malformed_packets(struct ngp_ctx *c)
 	    htons(4);
 	ASSERT_EQ(ngp_passes(c, f, len), 0);
 
-	/* 8. IHL claims more header than the frame actually carries.
-	   ip_len is raised to match hlen so the ip_len < hlen check does
-	   not fire first: this exercises the off + hlen > m_pkthdr.len
-	   check specifically (74 > 54). */
+	/*
+	 * 8. IHL claims more header than the frame actually carries.
+	 * ip_len is raised to match hlen so the ip_len < hlen check does
+	 * not fire first: this exercises the off + hlen > m_pkthdr.len
+	 * check specifically (74 > 54).
+	 */
 	len = ngp_tcp(f, 0x0a320110, 0x0a320210, 1, 2);
 	ip->ip_hl = 15;
 	ip->ip_len = htons(60);
@@ -699,8 +726,10 @@ test_fragment_action(struct ngp_ctx *c)
 
 	ASSERT_OK(ngp_wire(c));
 
-	/* Non-initial fragment: no transport header exists, so the
-	   fragment action decides and rule matching never runs. */
+	/*
+	 * Non-initial fragment: no transport header exists, so the
+	 * fragment action decides and rule matching never runs.
+	 */
 	len = ngp_frag(f, 0x0a320110, 0x0a320210, 1480, 0);
 	ASSERT_OK(ngp_cfg_actions(c, NG_POLICY_ALLOW, NG_POLICY_DROP,
 	    NG_POLICY_DROP, NG_POLICY_DROP));
@@ -709,9 +738,11 @@ test_fragment_action(struct ngp_ctx *c)
 	    NG_POLICY_DROP, NG_POLICY_DROP));
 	ASSERT_EQ(ngp_passes(c, f, len), 1);
 
-	/* First fragment: transport header is present, so it parses and
-	   matches normally, and default ALLOW lets it through even with
-	   frag_action DROP. */
+	/*
+	 * First fragment: transport header is present, so it parses and
+	 * matches normally, and default ALLOW lets it through even with
+	 * frag_action DROP.
+	 */
 	len = ngp_tcp(f, 0x0a320110, 0x0a320210, 1, 443);
 	((struct ip *)(f + ETHER_HDR_LEN))->ip_off = htons(IP_MF);
 	ASSERT_OK(ngp_cfg_actions(c, NG_POLICY_ALLOW, NG_POLICY_DROP,
@@ -765,9 +796,11 @@ test_ip_options(struct ngp_ctx *c)
 	ASSERT_OK(ngp_cfg_actions(c, NG_POLICY_ALLOW, NG_POLICY_DROP,
 	    NG_POLICY_DROP, NG_POLICY_DROP));
 
-	/* TCP behind a 4-byte options header: the transport header must be
-	   read at ETHER_HDR_LEN + 24, not + 20, and the frame must still
-	   be forwarded rather than treated as malformed padding. */
+	/*
+	 * TCP behind a 4-byte options header: the transport header must be
+	 * read at ETHER_HDR_LEN + 24, not + 20, and the frame must still
+	 * be forwarded rather than treated as malformed padding.
+	 */
 	len = ngp_tcp(f, 0x0a320110, 0x0a320210, 1, 2);
 	memmove(f + ETHER_HDR_LEN + 24, f + ETHER_HDR_LEN + 20,
 	    len - (ETHER_HDR_LEN + 20));
@@ -937,17 +970,21 @@ test_stale_generation_rejected(struct ngp_ctx *c)
 
 	/* First writer wins. */
 	ASSERT_OK(ngp_commit(c, b1.tx_id, 1, &r));
-	/* Second writer still believes the base is 1 and must be refused.
-	   (This also trips monotonicity, since b2's generation (2) is no
-	   longer greater than the new active generation (2) -- see b3
-	   below for a case that isolates the base_generation check.) */
+	/*
+	 * Second writer still believes the base is 1 and must be refused.
+	 * (This also trips monotonicity, since b2's generation (2) is no
+	 * longer greater than the new active generation (2) -- see b3
+	 * below for a case that isolates the base_generation check.)
+	 */
 	ASSERT_ERRNO(ngp_commit(c, b2.tx_id, 1, &r), ESTALE);
 
-	/* b3 is begun after b1's commit, so its generation (3) legitimately
-	   clears monotonicity against the new active generation (2).
-	   Committing it with a stale base=1 must still be refused, and
-	   only the optimistic-concurrency (base_generation) check can be
-	   responsible -- deleting that check would leave this green. */
+	/*
+	 * b3 is begun after b1's commit, so its generation (3) legitimately
+	 * clears monotonicity against the new active generation (2).
+	 * Committing it with a stale base=1 must still be refused, and
+	 * only the optimistic-concurrency (base_generation) check can be
+	 * responsible -- deleting that check would leave this green.
+	 */
 	ASSERT_OK(ngp_begin(c, &b3, 0));
 	ASSERT_EQ(b3.generation, 3);
 	ASSERT_EQ(b3.active_generation, 2);
@@ -999,8 +1036,10 @@ test_transaction_timeout(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Validation runs before anything is swapped: a bad rule fails the
-   commit and leaves the active generation untouched. */
+/*
+ * Validation runs before anything is swapped: a bad rule fails the
+ * commit and leaves the active generation untouched.
+ */
 static int
 test_commit_validation(struct ngp_ctx *c)
 {
@@ -1052,8 +1091,10 @@ test_commit_validation(struct ngp_ctx *c)
 	return (0);
 }
 
-/* A generation must define its default action; inheriting silently
-   would make a partially-built transaction look complete. */
+/*
+ * A generation must define its default action; inheriting silently
+ * would make a partially-built transaction look complete.
+ */
 static int
 test_commit_requires_default(struct ngp_ctx *c)
 {
@@ -1131,7 +1172,10 @@ test_reserved_fields_rejected(struct ngp_ctx *c)
 
 	ASSERT_OK(ngp_begin(c, &b, 0));
 
-	/* TX_SET_DEFAULT.reserved0/reserved1/reserved2, checked independently. */
+	/*
+	 * TX_SET_DEFAULT.reserved0/reserved1/reserved2, checked
+	 * independently.
+	 */
 	memset(&sd, 0, sizeof(sd));
 	sd.tx_id = b.tx_id;
 	sd.default_action = NG_POLICY_ALLOW;
@@ -1228,8 +1272,10 @@ test_addr_map_resolves_destination(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Mode A: arriving on the fabric hook, the destination is the hook's
-   endpoint and the source comes from the map. */
+/*
+ * Mode A: arriving on the fabric hook, the destination is the hook's
+ * endpoint and the source comes from the map.
+ */
 static int
 test_addr_map_resolves_source(struct ngp_ctx *c)
 {
@@ -1285,10 +1331,12 @@ test_addr_map_validation(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Many entries, to exercise probing rather than the trivial case.
-   The forwarding assertion is deferred to Task 7 (see above); this task
-   verifies only that the address map itself is built and used, via
-   st.naddrs and st.addr_hits. */
+/*
+ * Many entries, to exercise probing rather than the trivial case.
+ * The forwarding assertion is deferred to Task 7 (see above); this task
+ * verifies only that the address map itself is built and used, via
+ * st.naddrs and st.addr_hits.
+ */
 static int
 test_addr_map_scale(struct ngp_ctx *c)
 {
@@ -1374,8 +1422,10 @@ test_policy_matrix(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Lower numeric priority wins, and the winner is the one whose action
-   is applied even when a later rule would allow. */
+/*
+ * Lower numeric priority wins, and the winner is the one whose action
+ * is applied even when a later rule would allow.
+ */
 static int
 test_rule_priority(struct ngp_ctx *c)
 {
@@ -1460,9 +1510,11 @@ test_rule_priority_ties_by_order(struct ngp_ctx *c)
  * endpoints.
  */
 
-/* Case A: the ANY rule sits at the lower (winning) priority, so the
-   merge must prefer it over the endpoint-specific rule even though the
-   specific rule's bucket is walked as well. */
+/*
+ * Case A: the ANY rule sits at the lower (winning) priority, so the
+ * merge must prefer it over the endpoint-specific rule even though the
+ * specific rule's bucket is walked as well.
+ */
 static int
 test_rule_merge_any_wins(struct ngp_ctx *c)
 {
@@ -1490,10 +1542,12 @@ test_rule_merge_any_wins(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Case B: the same shape with the first two priorities swapped, so the
-   endpoint-specific rule now wins.  Case A alone would still pass a
-   merge that always drained the ANY list first; this pins the
-   comparison from the other side too. */
+/*
+ * Case B: the same shape with the first two priorities swapped, so the
+ * endpoint-specific rule now wins.  Case A alone would still pass a
+ * merge that always drained the ANY list first; this pins the
+ * comparison from the other side too.
+ */
 static int
 test_rule_merge_specific_wins(struct ngp_ctx *c)
 {
@@ -1521,11 +1575,13 @@ test_rule_merge_specific_wins(struct ngp_ctx *c)
 	return (0);
 }
 
-/* With the default bucket count (mask 0xf), endpoints 1001 and 1017
-   collide: 1001 & 15 == 1017 & 15 == 9.  The colliding rule belongs to
-   a different endpoint and sits at a lower (winning) priority, so a
-   packet from 1001 must skip it -- proving a bucket collision costs a
-   comparison against src_endpoint, not a wrong match. */
+/*
+ * With the default bucket count (mask 0xf), endpoints 1001 and 1017
+ * collide: 1001 & 15 == 1017 & 15 == 9.  The colliding rule belongs to
+ * a different endpoint and sits at a lower (winning) priority, so a
+ * packet from 1001 must skip it -- proving a bucket collision costs a
+ * comparison against src_endpoint, not a wrong match.
+ */
 static int
 test_rule_merge_bucket_collision(struct ngp_ctx *c)
 {
@@ -1689,7 +1745,10 @@ test_rule_counters(struct ngp_ctx *c)
 	ASSERT_EQ(out.e[1].rule.rule_id, 200);
 	ASSERT_EQ(out.e[1].match_packets, 1);
 
-	/* Statistics are always tagged with the generation that produced them. */
+	/*
+	 * Statistics are always tagged with the generation that produced
+	 * them.
+	 */
 	ASSERT_OK(ngp_get_stats(c, &st));
 	ASSERT_EQ(out.r.generation, st.generation);
 	ASSERT_EQ(st.rule_matches, 3);
@@ -1804,10 +1863,12 @@ test_rule_stats_pagination(struct ngp_ctx *c)
 		for (j = 0; j < n; j++) {
 			uint32_t global_idx = start + j;
 
-			/* The entry at this position must be exactly the
-			   rule built for that position, not merely *some*
-			   unseen rule -- this is what proves order, not
-			   just membership. */
+			/*
+			 * The entry at this position must be exactly the
+			 * rule built for that position, not merely *some*
+			 * unseen rule -- this is what proves order, not
+			 * just membership.
+			 */
 			ASSERT_EQ(out.e[j].index, global_idx);
 			ASSERT_EQ(out.e[j].rule.rule_id, global_idx + 1);
 			ASSERT_EQ(seen[global_idx], 0);
@@ -1837,9 +1898,11 @@ test_rule_stats_pagination(struct ngp_ctx *c)
 	sizeof(struct ng_policy_rule_stat))
 
 #define	NGP_CEIL_RULE_N		400
-#define	NGP_CEIL_RULE_CHUNK	200	/* well under ngp_install's 8KiB
-					   staging buffer and the 637-rule
-					   net.graph.maxdgram cap */
+/*
+ * Well under ngp_install's 8KiB staging buffer and the 637-rule
+ * net.graph.maxdgram cap.
+ */
+#define	NGP_CEIL_RULE_CHUNK	200
 
 /*
  * Regression test for the final-review defect, rule-stats side:
@@ -1909,7 +1972,8 @@ test_rule_stats_recvspace_ceiling(struct ngp_ctx *c)
 	for (iter = 0; iter < 10; iter++) {
 		memset(&q, 0, sizeof(q));
 		q.start_index = start;
-		q.max_entries = 0;	/* "as many as fit" -- the documented default */
+		/* "As many as fit" -- the documented default. */
+		q.max_entries = 0;
 
 		/*
 		 * Unlike ENDPOINT_LIST, GET_RULE_STATS sizes its response to
@@ -2015,8 +2079,10 @@ test_enforce_semantics(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Disabled: no lookup at all, so a policy that would drop is bypassed
-   and no rule counter moves. */
+/*
+ * Disabled: no lookup at all, so a policy that would drop is bypassed
+ * and no rule counter moves.
+ */
 static int
 test_disabled_bypasses_lookup(struct ngp_ctx *c)
 {
@@ -2055,8 +2121,10 @@ test_disabled_bypasses_lookup(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Permissive applies to parse categories too: "observe only" must mean
-   observe only, not "observe only for rule decisions". */
+/*
+ * Permissive applies to parse categories too: "observe only" must mean
+ * observe only, not "observe only for rule decisions".
+ */
 static int
 test_permissive_covers_parse_categories(struct ngp_ctx *c)
 {
@@ -2149,9 +2217,11 @@ ngp_sysctl_set_u32(const char *name, uint32_t v)
 	return (sysctlbyname(name, NULL, NULL, &v, sizeof(v)));
 }
 
-/* The three diagnostic counters are CTLTYPE_U64: reading them with the
-   u32 helper above fails with ENOMEM rather than returning a truncated
-   value, so a separate helper exists for them. */
+/*
+ * The three diagnostic counters are CTLTYPE_U64: reading them with the
+ * u32 helper above fails with ENOMEM rather than returning a truncated
+ * value, so a separate helper exists for them.
+ */
 static int
 ngp_sysctl_u64(const char *name, uint64_t *out)
 {
@@ -2259,8 +2329,10 @@ test_transaction_limit(struct ngp_ctx *c)
 	return (rc);
 }
 
-/* Memory accounting must move when policy is installed, and fall back
-   when the generation is replaced with an empty one. */
+/*
+ * Memory accounting must move when policy is installed, and fall back
+ * when the generation is replaced with an empty one.
+ */
 static int
 test_memory_accounting(struct ngp_ctx *c)
 {
@@ -2324,8 +2396,10 @@ test_memory_accounting(struct ngp_ctx *c)
 	return (0);
 }
 
-/* Transaction memory is accounted while the transaction is open and
-   released when it is aborted. */
+/*
+ * Transaction memory is accounted while the transaction is open and
+ * released when it is aborted.
+ */
 static int
 test_tx_memory_released_on_abort(struct ngp_ctx *c)
 {
@@ -2696,16 +2770,20 @@ test_concurrent_policy_replacement_adversarial(struct ngp_ctx *c)
 	ASSERT_OK(ngp_get_stats(c, &st));
 	ASSERT_EQ((uint32_t)st.generation, gen0 + ncommits);
 	ASSERT_EQ(s.sent > 0, 1);
-	/* See the comment in test_concurrent_policy_replacement() about
-	   why send failures other than ENOBUFS are unexpected, and why
-	   this identity -- rather than packets_total == s.sent -- is the
-	   one that actually fails on a swallowed packet, unlike the
-	   balanced-sum check below it. */
+	/*
+	 * See the comment in test_concurrent_policy_replacement() about
+	 * why send failures other than ENOBUFS are unexpected, and why
+	 * this identity -- rather than packets_total == s.sent -- is the
+	 * one that actually fails on a swallowed packet, unlike the
+	 * balanced-sum check below it.
+	 */
 	ASSERT_EQ(s.sent_other_error, 0);
 	ASSERT_EQ(st.packets_total, s.sent + s.sent_enobufs);
-	/* Quiescent now: the sum must match exactly. See the comment in
-	   test_concurrent_policy_replacement() about why the narrow form
-	   is valid for this endpoint topology. */
+	/*
+	 * Quiescent now: the sum must match exactly. See the comment in
+	 * test_concurrent_policy_replacement() about why the narrow form
+	 * is valid for this endpoint topology.
+	 */
 	ASSERT_EQ(st.packets_total,
 	    st.allowed_packets + st.dropped_packets);
 	ASSERT_EQ(st.no_peer_packets, 0);
@@ -2734,7 +2812,8 @@ const struct ngp_case ngp_cases[] = {
 	{ "unsupported_ethertype", test_unsupported_ethertype },
 	{ "malformed_packets",	test_malformed_packets },
 	{ "fragment_action",	test_fragment_action },
-	{ "unknown_ip_protocol_is_matched", test_unknown_ip_protocol_is_matched },
+	{ "unknown_ip_protocol_is_matched",
+	    test_unknown_ip_protocol_is_matched },
 	{ "ip_options",		test_ip_options },
 	{ "debug_force_copy_path", test_debug_force_copy_path },
 	{ "fresh_node_fails_closed", test_fresh_node_fails_closed },
@@ -2827,8 +2906,8 @@ main(int argc, char **argv)
 			fprintf(stderr, "  ng_policy does not appear to be "
 			    "loaded. Check with `kldstat -m ng_policy`, "
 			    "then\n  build and load it with "
-			    "`make -C src && doas kldload "
-			    "./src/ng_policy.ko`.\n");
+			    "`make -C sys/netgraph/ng_policy && doas kldload "
+			    "./sys/netgraph/ng_policy/ng_policy.ko`.\n");
 		return (2);
 	}
 	ngp_teardown(&c);
