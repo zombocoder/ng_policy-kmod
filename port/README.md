@@ -6,20 +6,45 @@ things it is missing cannot be produced here.
 ## What is missing, and why
 
 **`distinfo`.** It carries the SHA256 and byte size of the release
-tarball, which do not exist until a release is tagged and GitHub serves
-the distfile. Generate it, never write it by hand:
+tarball. The `v0.1` tag now exists and is pushed, and the port resolves
+the right URL from it:
+
+```
+$ make -V MASTER_SITES
+https://codeload.github.com/zombocoder/ng_policy-kmod/tar.gz/v0.1?dummy=/
+```
+
+But that URL answers 404, because **the repository is private**.
+codeload does not distinguish private from absent for an
+unauthenticated client, and the anonymous HTTPS git endpoint hangs
+asking for credentials while SSH works — which is how the diagnosis was
+confirmed. So `make makesum` has nothing to hash:
+
+```
+=> Attempting to fetch http://distcache.FreeBSD.org/ports-distfiles/...
+=> Couldn't fetch it - please try to retrieve this
+*** Error code 1
+```
+
+Making the repository public is the one remaining step. After that:
 
 ```sh
 mkdir -p /usr/ports/net/ng-policy
 cp Makefile pkg-descr /usr/ports/net/ng-policy/
 cd /usr/ports/net/ng-policy
-make makesum
+make makesum          # writes distinfo; copy it back here
 ```
 
-**A test build.** With no distfile there is nothing to fetch, so
-`make stage`, `poudriere testport` and `portlint` have not been run
-against this. Treat the file below as a first draft that compiles the
-right things, not as a port known to build in a clean jail.
+`distinfo` is never written by hand. The hash has to be of the exact
+bytes GitHub serves, and those depend on its own archiving, so a
+locally built tarball would produce a different and wrong value. An
+invented hash is worse than a missing file: it fails at install time,
+on somebody else's machine, looking like a corrupted download.
+
+**A test build.** With nothing fetchable, `make stage`,
+`poudriere testport` and `portlint` have not been run against this.
+Treat the Makefile as a draft that names the right things, not as a
+port known to build in a clean jail.
 
 ## What it does express
 
@@ -46,5 +71,18 @@ right things, not as a port known to build in a clean jail.
 MANDIR=/usr/local/share/man/man` stages `ng_policy.ko` into
 `/boot/modules` with `kldxref`, and `ng_policy.4.gz` into
 `/usr/local/share/man/man4`, and descends into no other directory.
-That is the behaviour the port depends on; the port itself is still
-unbuilt.
+
+The Makefile was also placed in a real ports tree and queried, which is
+what established that the variables resolve correctly:
+
+| | |
+|---|---|
+| `MASTER_SITES` | `https://codeload.github.com/zombocoder/ng_policy-kmod/tar.gz/v0.1?dummy=/` |
+| `DISTFILES` | `zombocoder-ng_policy-kmod-v0.1_GH0.tar.gz` |
+| `WRKSRC` | `work/ng_policy-kmod-0.1` |
+| `USE_GITHUB` | `yes` |
+
+So the tag, the version and the GitHub account and project all line up,
+and `WRKSRC` lands where `LICENSE_FILE` and `MAKE_ARGS` expect. What is
+unverified is everything downstream of the fetch: the build, the stage,
+the plist and the package.
