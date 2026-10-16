@@ -32,9 +32,10 @@ concurrency tests). Also `-Werror`.
 make
 ```
 
-Descends into `sys/netgraph/ng_policy`, `man` and `tests`. `doas make install` puts the
-module in `/boot/modules` (running `kldxref`, so `kldload ng_policy`
-then works by name) and `man/ng_policy.4` in `/usr/share/man/man4`.
+Descends into `sys/netgraph/ng_policy`, `man` and `tests`. `doas make
+install` puts the module in `/boot/modules` (running `kldxref`, so
+`kldload ng_policy` then works by name) and `man/ng_policy.4` in
+`/usr/share/man/man4`.
 
 The man page lives in `man/` with its own `Makefile` rather than
 alongside the sources because `sys/conf/kmod.mk` has no man-page
