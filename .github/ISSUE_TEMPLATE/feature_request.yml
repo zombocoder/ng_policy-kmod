@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a change to what ng_policy does
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `ng_policy` is the kernel fast path only. It deliberately knows
+        nothing about tenants, VPCs, jails, labels or other higher-level
+        concepts — see [docs/architecture.md](https://github.com/zombocoder/ng_policy-kmod/blob/main/docs/architecture.md).
+        Proposals that belong in a userland compiler will be declined.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, and why does it need the kernel?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        What should change. If it touches the control ABI, sketch the
+        message and its wire structs.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Including doing it in userland, or with existing messages.

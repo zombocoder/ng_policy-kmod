@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/zombocoder/ng_policy-kmod/security/advisories/new
+    about: Please report security issues privately, not as public issues.
+  - name: Reference documentation
+    url: https://github.com/zombocoder/ng_policy-kmod/blob/main/man/ng_policy.4
+    about: The ng_policy(4) man page — node model, control messages, sysctls, errno values.

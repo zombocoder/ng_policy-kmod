@@ -190,6 +190,13 @@ against a real release tarball, which does not exist until a release is
 tagged, and nothing has been built in a clean jail. What is and is not
 verified about it is spelled out in [`port/README.md`](port/README.md).
 
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the verification bar a
+change has to clear, and [`SECURITY.md`](SECURITY.md) for reporting
+vulnerabilities privately. Participation is covered by the
+[code of conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 BSD-2-Clause. See [`LICENSE`](LICENSE).

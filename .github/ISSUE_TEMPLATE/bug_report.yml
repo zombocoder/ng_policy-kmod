@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in ng_policy behaves wrongly, crashes, or leaks
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issues** (kernel crash or memory corruption reachable
+        from the control socket or a frame, or a frame forwarded that
+        policy says to drop) go through [SECURITY.md](https://github.com/zombocoder/ng_policy-kmod/blob/main/SECURITY.md),
+        not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: |
+        An `ngctl` script, a failing `ngp_test` case, an `ngp_fuzz`
+        seed and iteration count, or a small C program.
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: |
+        Relevant output — `ngctl` responses, `ngp_test` results, panic
+        message and backtrace, `vmstat -m | grep ng_policy`,
+        `sysctl net.graph.policy`.
+      render: text
+  - type: input
+    id: freebsd
+    attributes:
+      label: FreeBSD version
+      description: Output of `uname -a`
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ng_policy version
+      description: Commit or tag, and `sysctl net.graph.policy.version net.graph.policy.abi_version`
+    validations:
+      required: true
+  - type: checkboxes
+    id: kernel
+    attributes:
+      label: Kernel options
+      options:
+        - label: Kernel built with INVARIANTS
+        - label: Kernel built with WITNESS
