@@ -84,7 +84,7 @@ does and does not prove.
   `man/ng_policy.4` and the relevant file under `docs/`. If the test
   count changes, update it everywhere it is stated (`grep -rn
   "62 run"` is a good start).
-- **No claims without evidence.** The README's verification table pairs
+- **No claims without evidence.** The table in `docs/verification.md` pairs
   every property with what demonstrates it. Keep it that way: if a
   change adds a property, add the row and the test; if it cannot be
   tested here, say so in the row.

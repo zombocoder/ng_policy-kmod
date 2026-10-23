@@ -135,7 +135,7 @@ symmetrically for the source side. `ngp_endpoint_ref_ok()` accepting
 `EXTERNAL` as a rule field is exercised implicitly by any commit that
 uses it and is not rejected; there is no dedicated test that installs a
 rule naming `EXTERNAL` explicitly and sends a matching packet through
-it — see the completion-criteria table in the top-level `README.md` for
+it — see the table in [`verification.md`](verification.md) for
 this noted as a documentation-time gap rather than a silent claim.
 
 ## 5. ARP

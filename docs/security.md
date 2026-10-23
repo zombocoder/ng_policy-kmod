@@ -68,7 +68,7 @@ reverted — see the project's SDD ledger) therefore computes a bogus
 element budget during `ASCII2BINARY` and rejects legitimate hand-typed
 input with `E2BIG` — breaking exactly the workflow
 [`ngctl-examples.md`](ngctl-examples.md) depends on and that
-row 27 of the README table requires (`ngctl` standalone operation,
+row 27 of [`verification.md`](verification.md) requires (`ngctl` standalone operation,
 including hand-typed rule loading). A `getLength` callback has no
 parameter that tells it which direction it is being called from, so it
 cannot apply the bound only where the bound is meaningful.

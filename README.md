@@ -1,200 +1,166 @@
 # ng_policy
 
-> A FreeBSD Netgraph kernel node for fast, stateless, identity-aware
-> network policy enforcement using precompiled endpoint-based rules and
-> atomic policy generations.
+A FreeBSD [Netgraph](https://man.freebsd.org/netgraph/4) node type that
+filters Ethernet frames between pairs of hooks, using a precompiled rule
+set that is swapped in atomically.
 
-`ng_policy` is a kernel-resident Netgraph node type (`NG_POLICY_NODE_TYPE
-= "policy"`). It registers **endpoints** — each a pair of hooks, a
-workload side and a fabric side — evaluates every frame crossing one of
-those hooks against a **precompiled, priority-ordered rule set**, and
-forwards or drops it. It compiles nothing itself: rules, endpoint
-registrations, and an IPv4-to-endpoint address map arrive over a
-Netgraph control socket, already in binary form, and are swapped into
-place atomically as a single immutable **generation**. It knows
-endpoint IDs, IPv4 addresses, protocols, ports, ICMP type/code, actions,
-and generation numbers — nothing about tenants, VPCs, subnets, jails,
-VMs, labels, applications, environments, or clusters. See
-[`docs/architecture.md`](docs/architecture.md) for the full boundary.
+You put an `ng_policy` node on the wire between a workload (a jail, a VM,
+an interface) and whatever it connects to. Every frame is matched against
+the active rules and either forwarded to the other side or dropped. Rules
+are loaded over the node's control socket, from `ngctl` or from your own
+program via `libnetgraph`.
 
-## Where it sits
+## Features
 
-```
-   +--------------------------------+        +---------------------------+
-   |  userland policy compiler        |        |  ng_policy.ko (this repo)  |
-   |  (tenant/label/security-group     |        |                            |
-   |   intent -> endpoint IDs and      |        |  endpoint table            |
-   |   IPv4 rules -- not in this repo) | -----> |  policy snapshot           |
-   |                                    | control|  address map               |
-   |                                    | socket |  counters                  |
-   |                                    | (ngctl |                            |
-   |                                    |  or a  |  match + forward,          |
-   |                                    |  daemon| at line rate, no policy    |
-   |                                    |  over  |  decisions of its own      |
-   |                                    | NGM_*) |  beyond ALLOW/DROP         |
-   +--------------------------------+        +---------------------------+
-```
+- **Endpoints are hook pairs.** Each endpoint has a workload hook and a
+  fabric hook; an allowed frame always leaves through the other hook of
+  the same endpoint. The node filters, it never switches.
+- **Simple, predictable rules.** Match on source/destination endpoint,
+  protocol, port ranges and ICMP type/code. Lower priority runs first,
+  first match wins, anything unmatched takes the default action.
+- **IPv4 address map.** Addresses resolve to endpoint IDs; unknown
+  addresses resolve to a reserved `EXTERNAL` endpoint you can write
+  rules against.
+- **Atomic generations.** Rules and addresses are staged in a
+  transaction and committed as one immutable snapshot. A packet never
+  sees half an update, and concurrent writers get `ESTALE` instead of
+  overwriting each other.
+- **Three modes.** `ENFORCE`, `PERMISSIVE` (count would-be drops, pass
+  everything) and `DISABLED`.
+- **Fail-closed.** A new node drops everything until you commit a
+  policy.
+- **Counters** per node, per endpoint and per rule.
 
-`ng_policy` is the kernel fast path only. Deciding *what* a rule should
-say — translating tenant intent, security groups, or any higher-level
-concept into `src_endpoint`/`dst_endpoint` numbers and IPv4 rules — is
-entirely a userland concern, out of scope for this repository.
+## Requirements
 
-## Fail-closed by default
+- FreeBSD 14.3 or later (tested on 14.3-RELEASE, amd64)
+- Kernel sources in `/usr/src`
+- Root, via `doas` or `sudo`, to load the module and run the tests
 
-**A freshly constructed node starts at generation 0 with
-`default_action = DROP` and `mode = ENFORCE`.** It blocks all traffic
-until a policy generation is committed (or `mode` is set to
-`DISABLED`). This is almost always the first thing that surprises
-someone experimenting by hand — see the opening of
-[`docs/ngctl-examples.md`](docs/ngctl-examples.md).
-
-## Build and test
+## Build and install
 
 ```sh
-make                               # the module, the man page and the tests
-make -C sys/netgraph/ng_policy     # just ng_policy.ko, -Werror clean
-make -C tests                      # just ngp_test / ngp_fuzz / ngp_bench
-
-KO=./sys/netgraph/ng_policy/ng_policy.ko
-doas kldload $KO
-doas ./tests/ngp_test              # 62 run, 0 failed
-doas ./tests/ngp_fuzz 12345 200000 # seeded control- and packet-path fuzzing
-doas sh tests/ngp_stress.sh $KO 50 # leak check
-doas ./tests/ngp_bench             # commit-cost and lookup-cost tables
-doas kldunload ng_policy
-vmstat -m | grep -c ng_policy      # expect 0 — nothing leaked
-```
-
-`ngp_test` needs `ng_policy` loaded and needs to run as root; it says
-which one is missing and exits 2 rather than failing every case.
-
-To install rather than load by path — the module into `/boot/modules`
-with `kldxref` run, and the man page into `/usr/share/man/man4` — so
-that `kldload ng_policy` works by name:
-
-```sh
-doas make install
+make                 # module, man page and test programs
+doas make install    # module to /boot/modules, man page to man4
+doas kldload ng_policy
 man 4 ng_policy
 ```
 
-Full details, including how to add a new control message end to end:
-[`docs/development.md`](docs/development.md).
+To try it without installing, load the module straight from the build
+tree:
+
+```sh
+make -C sys/netgraph/ng_policy
+doas kldload ./sys/netgraph/ng_policy/ng_policy.ko
+```
+
+## Quick start
+
+Create a node, register two endpoints, allow HTTPS from one to the other
+(and the replies back), and commit:
+
+```sh
+doas ngctl -f - <<'EOF'
+mkpeer policy ctl ctl0
+name .:ctl pol0
+msg pol0: endpointadd { endpoint_id=1001 hook="ep-1001" peer_hook="fab-1001" }
+msg pol0: endpointadd { endpoint_id=2001 hook="ep-2001" peer_hook="fab-2001" }
+msg pol0: txbegin { }
+msg pol0: txaddrule { tx_id=1 nrules=2 rules=[ { rule_id=1 src_endpoint=1001 dst_endpoint=2001 src_port_min=0 src_port_max=65535 dst_port_min=443 dst_port_max=443 priority=10 flags=0 protocol=6 action=1 icmp_type=0 icmp_code=0 } { rule_id=2 src_endpoint=2001 dst_endpoint=1001 src_port_min=443 src_port_max=443 dst_port_min=0 dst_port_max=65535 priority=10 flags=0 protocol=6 action=1 icmp_type=0 icmp_code=0 } ] }
+msg pol0: txaddaddr { tx_id=1 naddrs=1 addrs=[ { ipv4=10.0.0.5 endpoint_id=1001 } ] }
+msg pol0: txsetdefault { tx_id=1 default_action=2 }
+msg pol0: txcommit { tx_id=1 base_generation=0 }
+msg pol0: getstats
+EOF
+```
+
+`action=1` is ALLOW, `action=2` is DROP, `protocol=6` is TCP.
+
+Two things that surprise people the first time:
+
+- **Nothing passes until you commit.** A new node starts at generation 0
+  with a default action of DROP.
+- **The node goes away when `ngctl` exits.** A node with no hooks left
+  removes itself, so run a multi-step session as one script, or keep a
+  data hook connected.
+
+The policy is stateless: allowing `A -> B` does not allow the reply
+`B -> A`, which is why the example has two rules.
+
+More worked sessions, with real output:
+[`docs/ngctl-examples.md`](docs/ngctl-examples.md).
+
+## How it fits together
+
+```
+  workload side                 ng_policy                 fabric side
+                       +-------------------------+
+  jail / VM / iface ---| ep-1001 <---> fab-1001  |--- ng_bridge, ng_ether,
+  jail / VM / iface ---| ep-2001 <---> fab-2001  |    another node, ...
+                       |                         |
+                       |  rules + address map    |
+                       |  (one generation)       |
+                       +-------------------------+
+                                   ^
+                                   |  control messages
+                          ngctl or libnetgraph
+```
+
+The module only enforces. Deciding what the rules should say, and which
+endpoint ID belongs to what, is left to whatever program drives it. See
+[`docs/architecture.md`](docs/architecture.md).
+
+## Running the tests
+
+```sh
+make -C tests
+doas kldload ./sys/netgraph/ng_policy/ng_policy.ko
+doas ./tests/ngp_test                  # 62 run, 0 failed
+doas ./tests/ngp_fuzz 12345 200000     # seeded fuzzing, control and packet paths
+doas sh tests/ngp_stress.sh ./sys/netgraph/ng_policy/ng_policy.ko 50
+doas ./tests/ngp_bench                 # commit and lookup benchmarks
+doas kldunload ng_policy
+vmstat -m | grep -c ng_policy          # 0 means nothing leaked
+```
+
+Use a VM or a machine you can afford to panic. If `ngp_test` can't run
+(module not loaded, not root), it says why and exits 2.
 
 ## Documentation
 
-[`man/ng_policy.4`](man/ng_policy.4) is the reference page — the node
-type, hooks, endpoint identity, modes, packet classification, rule
-matching, generations, every control message, the sysctls, the errno
-values and worked `ngctl` sessions. Read it first; the documents below
-go deeper than a man page should.
+Start with the man page, [`ng_policy(4)`](man/ng_policy.4): node type,
+hooks, modes, every control message, sysctls and error codes.
 
 | Document | Covers |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | The node model, the hook-pair endpoint decision, why the kernel makes no forwarding decision, the boundary against userland, and what the kernel deliberately does not know |
-| [`docs/packet-path.md`](docs/packet-path.md) | Every packet outcome with its own flow: allowed, denied, unknown destination, external destination, ARP, fragment, malformed, permissive violation |
-| [`docs/control-api.md`](docs/control-api.md) | Every control message, its wire structs, its errno values, the three deliberate departures from the requirements text, and the verified `net.graph.maxdgram` batching ceiling |
-| [`docs/policy-model.md`](docs/policy-model.md) | Rules, wildcards, priority and first-match semantics, generations, and why v0.1 is stateless |
-| [`docs/endpoint-model.md`](docs/endpoint-model.md) | Endpoint identity, reserved IDs, `LOCAL_HOST`, hook-name collisions, and lazy symmetric binding |
-| [`docs/concurrency.md`](docs/concurrency.md) | Why Netgraph's own writer exclusivity — not the net epoch — protects a policy swap, what the epoch is actually for, and what a commit's timing fields mean |
-| [`docs/statistics.md`](docs/statistics.md) | Every counter, its exact counting point, and the node-wide invariant |
-| [`docs/security.md`](docs/security.md) | Untrusted-input validation, the threat list, the array-length-clamp non-fix, and what testing with `INVARIANTS` off does and does not prove |
-| [`docs/performance.md`](docs/performance.md) | Measured commit and lookup costs, and what was not measured |
-| [`docs/ngctl-examples.md`](docs/ngctl-examples.md) | Executed, real-output `ngctl` sessions: create, register, install, read stats, switch modes, tear down |
-| [`docs/development.md`](docs/development.md) | Build/load/test/fuzz/benchmark commands, source layout, and adding a new control message |
-| [`docs/phase0-single-host-fabric.md`](docs/phase0-single-host-fabric.md) | Manual proof (spec `vnetfabric` Phase 0): epair/tap attach identically, fail-closed, default-deny, cross-subnet routing with no custom routing code — and why `tun` cannot attach to `ng_policy` at all |
+| [`architecture.md`](docs/architecture.md) | The node model, why an endpoint is a hook pair, node lifecycle |
+| [`packet-path.md`](docs/packet-path.md) | What happens to each kind of frame: allowed, denied, unknown, ARP, fragments, malformed |
+| [`policy-model.md`](docs/policy-model.md) | Rules, wildcards, priority, generations, the lookup structure |
+| [`endpoint-model.md`](docs/endpoint-model.md) | Endpoint IDs, reserved IDs, hook binding |
+| [`control-api.md`](docs/control-api.md) | Wire structs, errno values, batching and paging limits |
+| [`ngctl-examples.md`](docs/ngctl-examples.md) | Executed `ngctl` sessions with real output |
+| [`concurrency.md`](docs/concurrency.md) | Why a policy swap is safe, and what the net epoch is for |
+| [`statistics.md`](docs/statistics.md) | Every counter and where it is counted |
+| [`security.md`](docs/security.md) | Input validation, threat list, known limits of the testing |
+| [`performance.md`](docs/performance.md) | Measured commit and lookup costs |
+| [`verification.md`](docs/verification.md) | Each property the module claims, and the test that shows it |
+| [`development.md`](docs/development.md) | Source layout, full test sequence, adding a control message |
+| [`phase0-single-host-fabric.md`](docs/phase0-single-host-fabric.md) | A single-host walkthrough with epair/tap endpoints in VNET jails |
 
-## What is verified, and by what
+## Status and limitations
 
-Thirty properties the module is meant to have, each paired with the
-thing that actually demonstrates it. **Where a row has no test that
-proves it, the row says so** rather than covering the gap with a
-plausible-sounding claim — which is the only reason a table like this
-is worth reading instead of being a list of assertions.
-
-The numbering is this project's own. It originally tracked a section of
-a requirements document that is not part of this repository and cannot
-be consulted here, so the numbers index these rows and nothing else.
-
-| # | Property | Demonstrated by |
-|---|---|---|
-| 1 | Loads and unloads cleanly, with no leaks across the module lifecycle | `doas kldload`/`kldunload` + `test_node_lifecycle` + `vmstat -m | grep -c ng_policy` = 0 |
-| 2 | Enforces ALLOW/DROP for TCP | `test_policy_matrix`, `test_forward_ep_to_fab`, `test_forward_fab_to_ep` |
-| 3 | Enforces ALLOW/DROP for UDP | `test_udp_rules` |
-| 4 | Enforces ALLOW/DROP for ICMP, matched on type/code | `test_icmp_type_code_rules` |
-| 5 | Wildcards: `ANY` endpoint, `ANY` protocol, full port range | `test_wildcards` |
-| 6 | Priority: lower first, ties by insertion order, first match wins | `test_rule_priority`, `test_rule_priority_ties_by_order`, `test_rule_merge_any_wins`, `test_rule_merge_specific_wins`, `test_rule_merge_bucket_collision` |
-| 7 | Three operating modes: `DISABLED` / `PERMISSIVE` / `ENFORCE` | `test_disabled_bypasses_lookup`, `test_permissive_semantics`, `test_enforce_semantics` |
-| 8 | IPv4 address-to-endpoint mapping, with an `EXTERNAL` fallback for unmapped addresses | `test_addr_map_resolves_destination`, `test_addr_map_resolves_source`, `test_addr_map_validation` |
-| 9 | Malformed packets handled deterministically, never crash the node | `test_malformed_packets`, `test_ip_options`, `test_debug_force_copy_path` |
-| 10 | Fragments handled deterministically; non-initial fragments never reach rule matching | `test_fragment_action` |
-| 11 | ARP handled outside L4 policy, with its own configurable action | `test_arp_action` |
-| 12 | Unsupported EtherTypes (non-IPv4/ARP, VLAN included) take `unsupported_action` | `test_unsupported_ethertype` |
-| 13 | Unknown IPv4 protocols are matched by rule, not silently classed unsupported | `test_unknown_ip_protocol_is_matched` |
-| 14 | Policy commits atomically via generations (single-pointer swap) | `test_default_action_and_generation`, `test_commit_validation`; `docs/performance.md` — `commit_usec` ~1us even at 100,000 rules |
-| 15 | Stale-generation commits are rejected (optimistic concurrency) | `test_stale_generation_rejected` |
-| 16 | Transactions carry deadlines; abandoned ones are reaped automatically | `test_transaction_timeout`, `test_transaction_abort` |
-| 17 | Per-node counters with a defined, checked invariant | `test_reset_stats`; the `packets_total == allowed + dropped + no_peer` invariant checked in `test_concurrent_policy_replacement`/`_adversarial` |
-| 18 | Per-endpoint counters, credited to the ingress endpoint | `test_endpoint_counters`, `test_endpoint_credit_targets_ingress_endpoint` |
-| 19 | Per-rule counters, discarded with their generation | `test_rule_counters`, `test_rule_counters_reset_per_generation` |
-| 20 | Memory accounting reported (policy / transaction / endpoint / address map) | `test_memory_accounting`, `test_tx_memory_released_on_abort` |
-| 21 | Control input is validated as untrusted; malformed size, bad enum, or overflow-prone input is rejected with the correct errno | `test_short_message_rejected`, `test_commit_requires_default`, `test_unknown_transaction`, `test_endpoint_duplicate_rejected`, `test_endpoint_reserved_id_rejected`, `test_addr_map_validation`; `tests/ngp_fuzz.c` control-message fuzzing |
-| 22 | Rules/addresses load in bulk without one message per entry, at real scale (100,000 rules) | `tests/ngp_bench.c` commit table; `test_rule_limit` |
-| 23 | Large enumerations (endpoints, rule stats) are windowed rather than unbounded in one response, and paging across a real page boundary neither drops, duplicates, nor reorders entries | `test_endpoint_list_pagination`, `test_rule_stats_pagination` |
-| 24 | Forwarding stays correct and the node stays responsive under sustained concurrent policy replacement | `test_concurrent_policy_replacement`, `test_concurrent_policy_replacement_adversarial` |
-| 25 | Fuzz-tested on both the control-message path and the packet-parsing path | `tests/ngp_fuzz.c` (seed `12345`, 200,000 iterations, both surfaces) |
-| 26 | Leaks nothing across repeated node create/destroy and module load/unload cycles | `tests/ngp_stress.sh` + `vmstat -m | grep -c ng_policy` = 0 |
-| 27 | Drivable standalone from `ngctl`, including hand-typed ASCII rule loading | `docs/ngctl-examples.md` — executed sessions, hand-typed `txaddrule` array literal |
-| 28 | Programmable by a daemon through a stable, versioned ABI (type cookie + `version` field) | The entire `tests/` suite drives the node exclusively through `libnetgraph`/the real `NGM_POLICY_COOKIE` ABI, exactly as a daemon would |
-| 29 | Benchmarked: commit and lookup cost reported honestly, including measurement noise | `tests/ngp_bench.c` + `docs/performance.md` |
-| 30 | Requires no jail-, bhyve-, tenant-, or VPC-specific knowledge | `grep -rli "jail\|bhyve\|tenant\|vpc" sys/netgraph/ng_policy/*.{c,h}` — no matches |
-
-### Row 23 was a gap; closed
-
-`ENDPOINT_LIST` and `GET_RULE_STATS` both implement `start_index`/
-`max_entries` windowing, clamped to `NG_POLICY_BATCH_MAX = 512` per
-response (see [`control-api.md`](docs/control-api.md)). Until this
-fix, every test that called either command did so with everything
-fitting in one page — no test ever set `start_index` to a nonzero
-value or walked `next_index` across a real page boundary.
-
-Two tests were added to `tests/ngp_test.c`:
-`test_endpoint_list_pagination` registers 20 endpoints and pages
-through `ENDPOINT_LIST` at 7 entries per page (three pages: 7, 7, 6 —
-the short final page deliberately, since an off-by-one is most likely
-to surface there), asserting the union of every page is exactly the
-20 registered, each exactly once, with no gaps or duplicates, and that
-the walk terminates. `test_rule_stats_pagination` does the same for
-`GET_RULE_STATS` against 20 rules, additionally checking sorted order
-— each page's entries are checked against the exact global index and
-`rule_id` expected at that position, not just membership in the set.
-
-Both tests were verified to actually catch a paging bug, not just
-pass by construction: `next_index` was deliberately advanced one too
-far in `ng_policy_endpoint.c` and `returned` was deliberately clamped
-one short in `ng_policy_stats.c`, one at a time, each rebuilt and
-reloaded into the live kernel — `test_endpoint_list_pagination` and
-`test_rule_stats_pagination` failed exactly as expected against their
-respective bug, and continued passing when the *other* command's bug
-was live but their own was not. Both bugs were then reverted (`git
-diff` against `sys/netgraph/ng_policy/` confirmed byte-identical to
-the committed source before rebuilding the clean module), and the full
-62-test suite passes, with and without
-`net.graph.policy.debug_force_copy`.
-
-## Packaging
-
-[`port/`](port/) is a skeleton for `net/ng-policy`. It is not a
-finished port: `distinfo` has to be generated with `make makesum`
-against a real release tarball, which does not exist until a release is
-tagged, and nothing has been built in a clean jail. What is and is not
-verified about it is spelled out in [`port/README.md`](port/README.md).
+v0.1. IPv4 only, stateless, and VLAN-tagged frames are not inspected
+(they take the configurable `unsupported_action`). Throughput on real
+NICs has not been measured yet. A port skeleton for `net/ng-policy`
+lives in [`port/`](port/); see [`port/README.md`](port/README.md) for
+what is still missing.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the verification bar a
-change has to clear, and [`SECURITY.md`](SECURITY.md) for reporting
-vulnerabilities privately. Participation is covered by the
+Bug reports and patches are welcome. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for what a change needs to pass,
+and [`SECURITY.md`](SECURITY.md) for reporting vulnerabilities
+privately. Participation is covered by the
 [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
